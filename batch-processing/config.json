@@ -1,0 +1,9 @@
+{
+  "inputCsv": "test-data/batch-2000-songs.csv",
+  "outputDir": "outputs",
+  "pollIntervalMs": 30000,
+  "model": "gemini-flash-latest",
+  "promptPath": "docs/gemini-prompt/classification-prompt.md",
+  "testMode": false,
+  "testSongLimit": 50
+}
