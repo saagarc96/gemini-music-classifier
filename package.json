@@ -1,0 +1,30 @@
+{
+  "name": "gemini-music-classifier",
+  "version": "1.0.0",
+  "description": "Playlist-by-playlist music classification using Google Gemini Batch API",
+  "type": "module",
+  "main": "src/playlist-batch-runner.js",
+  "scripts": {
+    "process:playlist": "node src/playlist-batch-runner.js",
+    "process:all": "node src/orchestrator.js",
+    "monitor": "node src/monitor-batch-job.js",
+    "merge": "node scripts/merge-results.js",
+    "check-quota": "node scripts/check-quota.js"
+  },
+  "keywords": [
+    "music",
+    "classification",
+    "gemini",
+    "batch-api",
+    "playlist"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@braintrust/core": "^0.0.17",
+    "@google/generative-ai": "^0.21.0",
+    "csv-parse": "^5.6.0",
+    "csv-stringify": "^6.5.2"
+  },
+  "devDependencies": {}
+}

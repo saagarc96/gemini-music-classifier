@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Outputs
+outputs/
+logs/
+*.jsonl
+
+# Environment
+.env
+.env.local
+
+# API Keys
+config/secrets.json
+
+# Progress tracking
+playlists/processed/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
