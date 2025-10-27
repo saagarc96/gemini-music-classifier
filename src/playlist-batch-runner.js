@@ -12,18 +12,15 @@
  *   node src/playlist-batch-runner.js "Afterwork Jazz - Downtime"
  */
 
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
+const fs = require('fs').promises;
+const path = require('path');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PROJECT_ROOT = path.dirname(__dirname);
+const PROJECT_ROOT = path.join(__dirname, '..');
 
 // Import existing batch processing functions
-import { prepareBatchData } from './prepare-batch-data.js';
-import { submitBatchJob } from './submit-batch-job.js';
-import { monitorBatchJob } from './monitor-batch-job.js';
+const { prepareBatchInput } = require('./prepare-batch-input');
+const { submitBatchJob } = require('./submit-batch-job');
+const { monitorBatchJob } = require('./monitor-batch-job');
 
 const PROGRESS_FILE = path.join(PROJECT_ROOT, 'playlists', 'processed', 'completed.json');
 const INPUT_DIR = path.join(PROJECT_ROOT, 'playlists', 'input', 'isrc_output');
@@ -79,22 +76,18 @@ async function processPlaylist(playlistName) {
   const inputPath = path.join(INPUT_DIR, playlistName);
   const outputPath = path.join(OUTPUT_DIR, playlistName.replace('.csv', '-classified.csv'));
 
+  // Update config for this playlist
+  const config = require(path.join(PROJECT_ROOT, 'config', 'default.json'));
+  config.inputCsv = inputPath;
+
   // Step 1: Prepare batch data
   console.log('\n📝 Step 1: Preparing batch data...');
-  const config = {
-    inputCsv: inputPath,
-    outputDir: path.join(PROJECT_ROOT, 'outputs'),
-    model: 'gemini-flash-latest',
-    promptPath: path.join(PROJECT_ROOT, 'prompts', 'classification-prompt.md'),
-    testMode: false
-  };
-
-  const prepareResult = await prepareBatchData(config);
+  const prepareResult = await prepareBatchInput();
   console.log(`✅ Prepared ${prepareResult.songCount} songs`);
 
   // Step 2: Submit batch job
   console.log('\n🚀 Step 2: Submitting batch job...');
-  const submitResult = await submitBatchJob(config);
+  const submitResult = await submitBatchJob();
   console.log(`✅ Batch submitted: ${submitResult.batchId}`);
   console.log(`   Status: ${submitResult.state}`);
 
@@ -102,11 +95,7 @@ async function processPlaylist(playlistName) {
   console.log('\n⏳ Step 3: Monitoring batch job...');
   console.log('   This may take 12-24 hours...');
 
-  const monitorResult = await monitorBatchJob({
-    batchId: submitResult.batchId,
-    pollIntervalMs: 300000, // 5 minutes
-    ...config
-  });
+  const monitorResult = await monitorBatchJob();
 
   if (monitorResult.state === 'SUCCEEDED') {
     console.log('\n✅ Batch processing complete!');
@@ -174,11 +163,11 @@ async function main() {
 }
 
 // Run if called directly
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (require.main === module) {
   main().catch(err => {
     console.error('Error:', err);
     process.exit(1);
   });
 }
 
-export { processPlaylist, getAvailablePlaylists, loadProgress };
+module.exports = { processPlaylist, getAvailablePlaylists, loadProgress };
