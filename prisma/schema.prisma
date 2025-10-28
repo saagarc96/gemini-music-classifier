@@ -1,0 +1,55 @@
+// Prisma Schema for Music Classification Review Interface
+// This defines the database structure for storing songs and AI classifications
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("POSTGRES_PRISMA_URL") // Uses connection pooling
+  directUrl = env("POSTGRES_URL_NON_POOLING") // Uses direct connection for migrations
+}
+
+model Song {
+  id       Int    @id @default(autoincrement())
+  isrc     String @unique @db.VarChar(12)
+
+  // Original CSV metadata
+  title       String?
+  artist      String?
+  energy      String? @db.VarChar(20)
+  bpm         Int?
+  subgenre    String?
+  artwork     String?
+  sourceFile  String? @map("source_file")
+
+  // AI classifications (editable by curators)
+  aiStatus        String? @map("ai_status") @db.VarChar(50)
+  aiErrorMessage  String? @map("ai_error_message")
+  aiReasoning     String? @map("ai_reasoning")
+  aiContextUsed   String? @map("ai_context_used")
+  aiEnergy        String? @map("ai_energy") @db.VarChar(20)
+  aiAccessibility String? @map("ai_accessibility") @db.VarChar(20)
+  aiSubgenre1     String? @map("ai_subgenre_1") @db.VarChar(100)
+  aiSubgenre2     String? @map("ai_subgenre_2") @db.VarChar(100)
+  aiSubgenre3     String? @map("ai_subgenre_3") @db.VarChar(100)
+
+  // Review metadata
+  reviewed     Boolean   @default(false)
+  reviewedBy   String?   @map("reviewed_by") @db.VarChar(100)
+  reviewedAt   DateTime? @map("reviewed_at")
+  curatorNotes String?   @map("curator_notes")
+
+  // Timestamps
+  createdAt  DateTime @default(now()) @map("created_at")
+  modifiedAt DateTime @default(now()) @updatedAt @map("modified_at")
+
+  @@index([isrc])
+  @@index([aiSubgenre1], map: "idx_subgenre_1")
+  @@index([aiSubgenre2], map: "idx_subgenre_2")
+  @@index([aiSubgenre3], map: "idx_subgenre_3")
+  @@index([aiStatus], map: "idx_status")
+  @@index([reviewed])
+  @@map("songs")
+}
