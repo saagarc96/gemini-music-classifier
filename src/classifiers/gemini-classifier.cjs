@@ -5,7 +5,7 @@
  * Replaces the batch API approach with real-time classification
  */
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 const { initLogger } = require('braintrust');
 const fs = require('fs');
 const path = require('path');
@@ -17,7 +17,9 @@ if (!GEMINI_API_KEY) {
   console.warn('Warning: GEMINI_API_KEY not set in environment');
 }
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const genAI = new GoogleGenAI({
+  apiKey: GEMINI_API_KEY
+});
 
 // Initialize BrainTrust logger for this session
 const BRAINTRUST_PROJECT_NAME = process.env.BRAINTRUST_PROJECT_NAME || 'Music Classification - Gemini';
@@ -61,25 +63,41 @@ async function classifySong(artist, title, metadata = {}) {
   try {
     console.log(`[Gemini] Classifying: ${artist} - ${title}`);
 
-    const model = genAI.getGenerativeModel({
-      model: GEMINI_MODEL,
-      systemInstruction: SYSTEM_INSTRUCTION,
-      tools: [{ googleSearch: {} }],  // Enable web search
+    // Build config matching working evaluation code
+    const tools = [{ googleSearch: {} }];
+    const config = {
+      thinkingConfig: {
+        thinkingBudget: 0,
+      },
+      tools,
+      systemInstruction: [{ text: SYSTEM_INSTRUCTION }],
       generationConfig: {
         temperature: 0.3,
-        candidateCount: 1
-        // No maxOutputTokens limit - let Gemini finish responses naturally
+        candidateCount: 1,
+        maxOutputTokens: 2048  // Ensure enough space for complete JSON responses
       }
-    });
+    };
 
     const prompt = buildPrompt(artist, title, metadata);
 
-    // Make API call with retry logic
+    // Build contents array matching evaluation code format
+    const contents = [
+      {
+        role: 'user',
+        parts: [{ text: prompt }]
+      }
+    ];
+
+    // Make API call with retry logic using the working API format
     const result = await callGeminiWithRetry(() =>
-      model.generateContent(prompt)
+      genAI.models.generateContent({
+        model: GEMINI_MODEL,
+        config,
+        contents
+      })
     );
 
-    const responseText = result.response.text();
+    const responseText = result.text || '';
     const classification = parseGeminiResponse(responseText);
 
     console.log(`[Gemini] Success: ${artist} - ${title} → ${classification.energy} / ${classification.accessibility} / ${classification.subgenre1}`);
@@ -146,6 +164,7 @@ async function classifySong(artist, title, metadata = {}) {
 
 /**
  * Builds the prompt for Gemini
+ * Output format is defined in SYSTEM_INSTRUCTION, so just provide song details
  */
 function buildPrompt(artist, title, metadata) {
   let prompt = `Please classify the following song:\n\n`;
@@ -160,24 +179,12 @@ function buildPrompt(artist, title, metadata) {
     prompt += `Pre-analyzed Energy: ${metadata.energy}\n`;
   }
 
-  prompt += `\nIMPORTANT: You MUST return a complete, valid JSON object. Do not truncate your response.\n`;
-  prompt += `Provide ONLY this JSON format (no extra text before or after):\n`;
-  prompt += `{\n`;
-  prompt += `  "energy": "Very Low|Low|Medium|High|Very High",\n`;
-  prompt += `  "accessibility": "Eclectic|Timeless|Commercial|Cheesy",\n`;
-  prompt += `  "subgenre1": "Primary subgenre",\n`;
-  prompt += `  "subgenre2": "Secondary subgenre or null",\n`;
-  prompt += `  "subgenre3": "Tertiary subgenre or null",\n`;
-  prompt += `  "reasoning": "Brief explanation (2-3 sentences max)",\n`;
-  prompt += `  "context_used": "Key web findings (1 sentence)"\n`;
-  prompt += `}\n`;
-  prompt += `\nEnsure your response is valid JSON with all fields present and closing braces.\n`;
-
   return prompt;
 }
 
 /**
  * Parses Gemini response into structured classification
+ * Handles both array format (subgenres: [...]) and individual fields (subgenre1, subgenre2, subgenre3)
  */
 function parseGeminiResponse(responseText) {
   try {
@@ -192,17 +199,31 @@ function parseGeminiResponse(responseText) {
 
     const parsed = JSON.parse(jsonText);
 
+    // Handle both array format and individual field format for subgenres
+    let subgenre1, subgenre2, subgenre3;
+    if (parsed.subgenres && Array.isArray(parsed.subgenres)) {
+      // Array format from system instruction
+      subgenre1 = parsed.subgenres[0] || null;
+      subgenre2 = parsed.subgenres[1] || null;
+      subgenre3 = parsed.subgenres[2] || null;
+    } else {
+      // Individual field format
+      subgenre1 = parsed.subgenre1 || null;
+      subgenre2 = parsed.subgenre2 || null;
+      subgenre3 = parsed.subgenre3 || null;
+    }
+
     // Validate required fields
-    if (!parsed.energy || !parsed.accessibility || !parsed.subgenre1) {
+    if (!parsed.energy || !parsed.accessibility || !subgenre1) {
       throw new Error('Missing required fields in response');
     }
 
     return {
       energy: parsed.energy,
       accessibility: parsed.accessibility,
-      subgenre1: parsed.subgenre1,
-      subgenre2: parsed.subgenre2 || null,
-      subgenre3: parsed.subgenre3 || null,
+      subgenre1: subgenre1,
+      subgenre2: subgenre2,
+      subgenre3: subgenre3,
       reasoning: parsed.reasoning || '',
       context: parsed.context_used || ''
     };
