@@ -10,7 +10,7 @@
     "prisma:migrate": "prisma migrate dev",
     "create-schema": "prisma migrate deploy",
     "seed": "node scripts/seed.js",
-    "enrich:playlist": "node scripts/enrich-playlist.js",
+    "enrich:playlist": "node scripts/enrich-playlist.cjs",
     "process:playlist": "node src/playlist-batch-runner.js",
     "process:all": "node src/orchestrator.js",
     "monitor": "node src/monitor-batch-job.js",

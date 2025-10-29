@@ -6,17 +6,36 @@
  */
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { initLogger } = require('braintrust');
 const fs = require('fs');
 const path = require('path');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
 if (!GEMINI_API_KEY) {
   console.warn('Warning: GEMINI_API_KEY not set in environment');
 }
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+// Initialize BrainTrust logger for this session
+const BRAINTRUST_PROJECT_NAME = process.env.BRAINTRUST_PROJECT_NAME || 'Music Classification - Gemini';
+const BRAINTRUST_PROJECT_ID = process.env.BRAINTRUST_PROJECT_ID;
+const experimentName = `csv-enrichment-${Date.now()}`;
+
+let braintrustLogger = null;
+if (process.env.BRAINTRUST_API_KEY) {
+  console.log(`[BrainTrust] Initializing project: ${BRAINTRUST_PROJECT_NAME}`);
+  console.log(`[BrainTrust] Experiment: ${experimentName}`);
+  braintrustLogger = initLogger({
+    project: BRAINTRUST_PROJECT_NAME,
+    experiment: experimentName,
+    projectId: BRAINTRUST_PROJECT_ID
+  });
+} else {
+  console.warn('[BrainTrust] API key not set, logging disabled');
+}
 
 // Load system instruction once at module load
 const SYSTEM_INSTRUCTION = loadSystemInstruction();
@@ -60,6 +79,25 @@ async function classifySong(artist, title, metadata = {}) {
 
     console.log(`[Gemini] Success: ${artist} - ${title} → ${classification.energy} / ${classification.accessibility} / ${classification.subgenre1}`);
 
+    // Log to BrainTrust if available
+    if (braintrustLogger) {
+      braintrustLogger.log({
+        input: {
+          artist,
+          title,
+          metadata
+        },
+        output: classification,
+        metadata: {
+          status: 'SUCCESS',
+          model: GEMINI_MODEL,
+          has_energy: !!classification.energy,
+          has_accessibility: !!classification.accessibility,
+          subgenre_count: [classification.subgenre1, classification.subgenre2, classification.subgenre3].filter(Boolean).length
+        }
+      });
+    }
+
     return {
       ...classification,
       status: 'SUCCESS'
@@ -68,7 +106,7 @@ async function classifySong(artist, title, metadata = {}) {
   } catch (error) {
     console.error(`[Gemini] Error classifying ${artist} - ${title}:`, error.message);
 
-    return {
+    const errorResult = {
       energy: null,
       accessibility: null,
       subgenre1: null,
@@ -79,6 +117,25 @@ async function classifySong(artist, title, metadata = {}) {
       status: 'ERROR',
       error_message: error.message
     };
+
+    // Log error to BrainTrust if available
+    if (braintrustLogger) {
+      braintrustLogger.log({
+        input: {
+          artist,
+          title,
+          metadata
+        },
+        output: errorResult,
+        metadata: {
+          status: 'ERROR',
+          model: GEMINI_MODEL,
+          error_message: error.message
+        }
+      });
+    }
+
+    return errorResult;
   }
 }
 
@@ -179,6 +236,14 @@ async function callGeminiWithRetry(fn, maxRetries = 3) {
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+// Flush BrainTrust logs on process exit
+process.on('beforeExit', async () => {
+  if (braintrustLogger) {
+    console.log('[BrainTrust] Flushing logs...');
+    await braintrustLogger.flush();
+  }
+});
 
 module.exports = {
   classifySong

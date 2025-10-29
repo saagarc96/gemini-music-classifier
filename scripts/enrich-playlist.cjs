@@ -22,8 +22,9 @@ const path = require('path');
 const csv = require('csv-parser');
 const { createObjectCsvWriter } = require('csv-writer');
 const { PrismaClient } = require('@prisma/client');
-const { classifySong } = require('../src/classifiers/gemini-classifier');
-const { classifyExplicitContent } = require('../src/classifiers/explicit-classifier');
+const { initLogger } = require('braintrust');
+const { classifySong } = require('../src/classifiers/gemini-classifier.cjs');
+const { classifyExplicitContent } = require('../src/classifiers/explicit-classifier.cjs');
 
 const prisma = new PrismaClient();
 
@@ -62,11 +63,42 @@ console.log('');
  * Main enrichment function
  */
 async function enrichPlaylist() {
+  // Initialize BrainTrust logger
+  let braintrustLogger = null;
+  if (process.env.BRAINTRUST_API_KEY) {
+    const projectName = process.env.BRAINTRUST_PROJECT_NAME || 'Music Classification - Gemini';
+    const experimentName = `csv-enrichment-batch-${Date.now()}`;
+
+    console.log(`[BrainTrust] Project: ${projectName}`);
+    console.log(`[BrainTrust] Experiment: ${experimentName}\n`);
+
+    braintrustLogger = initLogger({
+      project: projectName,
+      experiment: experimentName,
+      projectId: process.env.BRAINTRUST_PROJECT_ID
+    });
+  }
+
   try {
     // 1. Load CSV
     console.log('[1/5] Loading CSV...');
     const songs = await loadCSV(csvPath);
     console.log(`  ✓ Loaded ${songs.length} songs\n`);
+
+    // Log batch metadata to BrainTrust
+    if (braintrustLogger) {
+      braintrustLogger.log({
+        input: {
+          csv_path: csvPath,
+          song_count: songs.length,
+          options
+        },
+        metadata: {
+          type: 'batch_start',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
 
     // 2. Process songs in batches
     console.log(`[2/5] Processing songs (concurrency: ${options.concurrency})...`);
@@ -117,6 +149,24 @@ async function enrichPlaylist() {
           console.log(`    - ${r.artist} - ${r.title}: ${r.error_message}`);
         });
       console.log('');
+    }
+
+    // Log batch completion to BrainTrust
+    if (braintrustLogger) {
+      braintrustLogger.log({
+        output: {
+          summary,
+          output_path: outputPath
+        },
+        metadata: {
+          type: 'batch_complete',
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      console.log('[BrainTrust] Flushing logs...');
+      await braintrustLogger.flush();
+      console.log('[BrainTrust] ✓ Logs uploaded\n');
     }
 
     console.log('='.repeat(60));
