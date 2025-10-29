@@ -208,6 +208,12 @@ export const ACCESSIBILITY_TYPES = [
   "Cheesy",
 ] as const;
 
+export const EXPLICIT_TYPES = [
+  "Explicit",
+  "Suggestive",
+  "Family Friendly",
+] as const;
+
 export const AI_STATUSES = [
   "SUCCESS",
   "ERROR",
@@ -224,6 +230,7 @@ export const REVIEW_STATUSES = [
 // TypeScript types for compile-time safety
 export type EnergyLevel = typeof ENERGY_LEVELS[number];
 export type AccessibilityType = typeof ACCESSIBILITY_TYPES[number];
+export type ExplicitType = typeof EXPLICIT_TYPES[number];
 export type AIStatus = typeof AI_STATUSES[number];
 export type ReviewStatus = typeof REVIEW_STATUSES[number];
 export type Subgenre = typeof SUBGENRES[number];

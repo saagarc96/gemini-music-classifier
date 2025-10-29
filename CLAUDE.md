@@ -18,7 +18,44 @@ The system is built for Raina Music, a B2B music streaming company serving hospi
 
 ## Key Commands
 
-### Batch Processing Workflows
+### CSV Enrichment Workflow (NEW - Recommended)
+
+The new enrichment workflow uses **standard Gemini API + Parallel AI** for real-time processing with database storage:
+
+```bash
+# Enrich a single playlist CSV
+npm run enrich:playlist playlists/input/my-playlist.csv
+
+# Options:
+npm run enrich:playlist playlist.csv --force              # Force reprocess all songs
+npm run enrich:playlist playlist.csv --concurrency=10     # Process 10 songs at a time
+npm run enrich:playlist playlist.csv --skip-existing      # Skip songs already in DB
+npm run enrich:playlist playlist.csv --gemini-only        # Only run Gemini (skip explicit)
+npm run enrich:playlist playlist.csv --explicit-only      # Only run explicit check
+```
+
+**What it does:**
+1. Reads CSV playlist file
+2. For each song:
+   - Runs Gemini classification (energy, accessibility, 3 subgenres, reasoning)
+   - Runs Parallel AI explicit content check (Explicit/Suggestive/Family Friendly)
+3. Saves results directly to database (Postgres via Prisma)
+4. Exports enriched CSV to `outputs/` directory
+5. Shows progress and summary statistics
+
+**Estimated time:** ~5-10 minutes for 200 songs (with default concurrency=5)
+
+**Advantages over batch API:**
+- Real-time progress tracking
+- Resume capability if interrupted
+- Easier debugging
+- Direct database storage
+- Parallel AI explicit content detection
+- No 12-24 hour wait
+
+### Batch Processing Workflows (Legacy)
+
+These scripts use the old Gemini Batch API approach (slower, no explicit content):
 
 ```bash
 # Process all playlists end-to-end (12-24 hour batch processing)
@@ -40,8 +77,15 @@ npm run check-quota
 ### Review Interface (Web App)
 
 ```bash
-# Start React dev server (runs on http://localhost:5173)
-npm run dev:client
+# Start both servers for local development
+# Terminal 1: Backend API server
+vercel dev --listen 3001
+
+# Terminal 2: React dev server (wait for backend to start first)
+cd client && npm run dev
+
+# Or use the npm scripts:
+npm run dev:client       # Just frontend (needs backend already running)
 
 # Build client for production
 npm run build:client
@@ -50,6 +94,12 @@ npm run build:client
 npm run create-schema    # Run Prisma migrations
 npm run seed             # Import 50 songs from CSV
 ```
+
+**Local Development Setup:**
+1. Backend runs on `http://localhost:3001` (Vercel dev server with API endpoints)
+2. Frontend runs on `http://localhost:3000` (Vite dev server with HMR)
+3. Vite proxies `/api/*` requests to port 3001 (see `client/vite.config.ts:59-64`)
+4. Always start backend FIRST, then frontend
 
 ### Prisma (Database)
 
@@ -189,17 +239,30 @@ Edit `config/default.json`:
 Required in `.env` (or `.env.local` for local development):
 
 ```bash
-# Batch Processing
-GEMINI_API_KEY=your_gemini_api_key          # From Google AI Studio
-BRAINTRUST_API_KEY=your_braintrust_key      # For observability (optional)
+# Google Gemini (for main classification)
+GEMINI_API_KEY=your_gemini_api_key          # From Google AI Studio (required)
+GEMINI_MODEL=gemini-2.0-flash-exp           # Model to use (optional, defaults to this)
+
+# Parallel AI (for explicit content detection)
+PARALLEL_AI_API_KEY=your_parallel_ai_key    # From Parallel AI (required for enrichment)
+PARALLEL_AI_ENDPOINT=https://api.parallel.ai/v1/tasks/runs  # API endpoint (optional)
+
+# BrainTrust (observability - optional)
+BRAINTRUST_API_KEY=your_braintrust_key      # For logging and quality tracking
 BRAINTRUST_PROJECT_NAME=Music Classification - Gemini
 
-# Review Interface + Database (auto-populated by Vercel)
+# Database (auto-populated by Vercel)
 POSTGRES_PRISMA_URL=postgres://...          # Pooled connection (for API endpoints)
-POSTGRES_URL_NON_POOLING=postgres://...     # Direct connection (for migrations)
+POSTGRES_URL_NON_POOLING=postgres://...     # Direct connection (for migrations + enrichment)
+POSTGRES_URL=postgres://...                 # Default connection
 ```
 
-**Setup**: Run `vercel env pull .env.local` to pull database credentials from Vercel.
+**Setup**:
+1. Copy `.env.example` to `.env`
+2. Run `vercel env pull .env.local` to pull database credentials from Vercel
+3. Add your Gemini API key from https://aistudio.google.com/apikey
+4. Add your Parallel AI API key from Parallel AI dashboard
+5. (Optional) Add BrainTrust key for observability
 
 ## File Structure
 
@@ -308,6 +371,8 @@ This enables success rate tracking, error analysis, and classification quality r
 
 ## Common Issues
 
+### Batch Processing Issues
+
 **Quota Exceeded**: Wait 2-4 hours between submissions. Check usage dashboard.
 
 **Batch Failed**: Check logs directory. Common causes:
@@ -318,6 +383,28 @@ This enables success rate tracking, error analysis, and classification quality r
 **Missing Results**: Batch API may take up to 24 hours. Use `npm run monitor` to poll status.
 
 **Download Errors**: SDK download for file-based batch outputs has known limitations. The monitor script attempts download and logs file ID for manual retrieval if needed.
+
+### Review Interface Issues
+
+**Prisma Connection Error (P6008)**: If you see "Accelerate was not able to connect to your database":
+- Prisma Accelerate requires special configuration for connection pooling
+- For local development, use direct connection instead
+- Fix: Change `prisma/schema.prisma:10` from `POSTGRES_PRISMA_URL` to `POSTGRES_URL_NON_POOLING`
+- Run `npx prisma generate` to regenerate client
+- Restart both servers
+
+**API Returns HTML Instead of JSON**: If frontend shows "Unexpected token '<'":
+- Backend server not running or running on wrong port
+- Frontend trying to fetch from `http://localhost:3000/api/songs` but no API there
+- Fix: Ensure Vercel dev is running on port 3001 (`vercel dev --listen 3001`)
+- Vite proxy will route `/api/*` requests to 3001
+- Verify proxy config in `client/vite.config.ts:59-64`
+
+**Songs Not Loading**: Check these in order:
+1. Is backend running on port 3001? (`curl http://localhost:3001/api/songs`)
+2. Is database seeded? (`npm run seed` should show 50 successful inserts)
+3. Check browser console for API errors
+4. Verify `.env.local` has correct database credentials
 
 ## Utilities
 
@@ -374,10 +461,22 @@ To add/modify fields:
 
 ### Database Connection
 
-- API endpoints use `POSTGRES_PRISMA_URL` (pooled, handles concurrency)
-- Migrations use `POSTGRES_URL_NON_POOLING` (direct, required for schema changes)
-- Prisma manages connection lifecycle (no manual pooling needed)
-- Each serverless function gets isolated Prisma Client instance
+**Local Development:**
+- Uses `POSTGRES_URL_NON_POOLING` (direct connection to Vercel Postgres)
+- Configured in `prisma/schema.prisma:10`
+- Prisma Accelerate (pooled connection) requires additional setup and is disabled for local dev
+- Run `npx prisma generate` after schema changes to regenerate Prisma Client
+
+**Production (when deployed to Vercel):**
+- Can use `POSTGRES_PRISMA_URL` (Prisma Accelerate with connection pooling)
+- Switch `url` in `prisma/schema.prisma` from `POSTGRES_URL_NON_POOLING` to `POSTGRES_PRISMA_URL`
+- Provides better performance and handles concurrent connections
+- Migrations always use `POSTGRES_URL_NON_POOLING` (via `directUrl`)
+
+**Environment Variables:**
+- `POSTGRES_URL_NON_POOLING`: Direct connection (local dev + migrations)
+- `POSTGRES_PRISMA_URL`: Pooled connection via Prisma Accelerate (production)
+- Both automatically populated by `vercel env pull .env.local`
 
 ### Benefits Over Raw SQL
 

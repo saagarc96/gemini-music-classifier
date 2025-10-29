@@ -19,6 +19,7 @@ export default function App() {
   const [selectedReviewStatus, setSelectedReviewStatus] = useState('unreviewed');
   const [selectedEnergy, setSelectedEnergy] = useState('all');
   const [selectedAccessibility, setSelectedAccessibility] = useState('all');
+  const [selectedExplicit, setSelectedExplicit] = useState('all');
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -29,7 +30,7 @@ export default function App() {
   // Fetch songs when filters or page changes
   useEffect(() => {
     fetchSongs();
-  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, currentPage]);
+  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, currentPage]);
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -42,6 +43,7 @@ export default function App() {
         reviewStatus: selectedReviewStatus !== 'all' ? selectedReviewStatus : undefined,
         energy: selectedEnergy !== 'all' ? selectedEnergy : undefined,
         accessibility: selectedAccessibility !== 'all' ? selectedAccessibility : undefined,
+        explicit: selectedExplicit !== 'all' ? selectedExplicit : undefined,
       });
 
       setSongs(response.data);
@@ -68,6 +70,7 @@ export default function App() {
       const payload: UpdateSongPayload = {
         ai_energy: updates.ai_energy || song.ai_energy || '',
         ai_accessibility: updates.ai_accessibility || song.ai_accessibility || '',
+        ai_explicit: updates.ai_explicit || song.ai_explicit || null,
         ai_subgenre_1: updates.ai_subgenre_1 || song.ai_subgenre_1 || '',
         ai_subgenre_2: updates.ai_subgenre_2 || null,
         ai_subgenre_3: updates.ai_subgenre_3 || null,
@@ -144,6 +147,7 @@ export default function App() {
           selectedReviewStatus={selectedReviewStatus}
           selectedEnergy={selectedEnergy}
           selectedAccessibility={selectedAccessibility}
+          selectedExplicit={selectedExplicit}
           onSubgenreChange={(value) => {
             setSelectedSubgenre(value);
             setCurrentPage(1); // Reset to page 1 on filter change
@@ -162,6 +166,10 @@ export default function App() {
           }}
           onAccessibilityChange={(value) => {
             setSelectedAccessibility(value);
+            setCurrentPage(1);
+          }}
+          onExplicitChange={(value) => {
+            setSelectedExplicit(value);
             setCurrentPage(1);
           }}
           totalCount={totalSongs}

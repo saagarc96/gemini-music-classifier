@@ -24,6 +24,7 @@ const prisma = new PrismaClient();
 // Valid enum values
 const VALID_ENERGY = ['Very Low', 'Low', 'Medium', 'High', 'Very High'];
 const VALID_ACCESSIBILITY = ['Eclectic', 'Timeless', 'Commercial', 'Cheesy'];
+const VALID_EXPLICIT = ['Explicit', 'Suggestive', 'Family Friendly'];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow PATCH requests
@@ -64,12 +65,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Validate explicit value (optional)
+    if (payload.ai_explicit && !VALID_EXPLICIT.includes(payload.ai_explicit)) {
+      return res.status(400).json({
+        error: 'Invalid explicit value',
+        message: `Must be one of: ${VALID_EXPLICIT.join(', ')}`,
+      });
+    }
+
     // Update song using Prisma
     const updatedSong = await prisma.song.update({
       where: { isrc },
       data: {
         aiEnergy: payload.ai_energy,
         aiAccessibility: payload.ai_accessibility,
+        aiExplicit: payload.ai_explicit || null,
         aiSubgenre1: payload.ai_subgenre_1,
         aiSubgenre2: payload.ai_subgenre_2 || null,
         aiSubgenre3: payload.ai_subgenre_3 || null,
@@ -97,6 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ai_context_used: updatedSong.aiContextUsed,
       ai_energy: updatedSong.aiEnergy,
       ai_accessibility: updatedSong.aiAccessibility,
+      ai_explicit: updatedSong.aiExplicit,
       ai_subgenre_1: updatedSong.aiSubgenre1,
       ai_subgenre_2: updatedSong.aiSubgenre2,
       ai_subgenre_3: updatedSong.aiSubgenre3,

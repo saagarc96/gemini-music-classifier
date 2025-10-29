@@ -6,7 +6,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Song } from '../lib/api';
-import { ENERGY_LEVELS, ACCESSIBILITY_TYPES, SUBGENRES } from '../data/constants';
+import { ENERGY_LEVELS, ACCESSIBILITY_TYPES, EXPLICIT_TYPES, SUBGENRES } from '../data/constants';
 import {
   Select,
   SelectContent,
@@ -27,6 +27,7 @@ interface ReviewModalProps {
 export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewModalProps) {
   const [energy, setEnergy] = useState<string | undefined>(undefined);
   const [accessibility, setAccessibility] = useState<string | undefined>(undefined);
+  const [explicit, setExplicit] = useState<string | undefined>(undefined);
   const [subgenre1, setSubgenre1] = useState<string | undefined>(undefined);
   const [subgenre2, setSubgenre2] = useState<string | undefined>(undefined);
   const [subgenre3, setSubgenre3] = useState<string | undefined>(undefined);
@@ -36,6 +37,7 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
     if (song) {
       setEnergy(song.ai_energy && song.ai_energy.trim() !== '' ? song.ai_energy : undefined);
       setAccessibility(song.ai_accessibility && song.ai_accessibility.trim() !== '' ? song.ai_accessibility : undefined);
+      setExplicit(song.ai_explicit && song.ai_explicit.trim() !== '' ? song.ai_explicit : undefined);
       setSubgenre1(song.ai_subgenre_1 && song.ai_subgenre_1.trim() !== '' ? song.ai_subgenre_1 : undefined);
       setSubgenre2(song.ai_subgenre_2 && song.ai_subgenre_2.trim() !== '' ? song.ai_subgenre_2 : undefined);
       setSubgenre3(song.ai_subgenre_3 && song.ai_subgenre_3.trim() !== '' ? song.ai_subgenre_3 : undefined);
@@ -49,6 +51,7 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
     onSave(song.id, {
       ai_energy: energy || '',
       ai_accessibility: accessibility || '',
+      ai_explicit: explicit || null,
       ai_subgenre_1: subgenre1 || '',
       ai_subgenre_2: (subgenre2 && subgenre2 !== '_none') ? subgenre2 : null,
       ai_subgenre_3: (subgenre3 && subgenre3 !== '_none') ? subgenre3 : null,
@@ -65,6 +68,7 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
     onSave(song.id, {
       ai_energy: energy || '',
       ai_accessibility: accessibility || '',
+      ai_explicit: explicit || null,
       ai_subgenre_1: subgenre1 || '',
       ai_subgenre_2: (subgenre2 && subgenre2 !== '_none') ? subgenre2 : null,
       ai_subgenre_3: (subgenre3 && subgenre3 !== '_none') ? subgenre3 : null,
@@ -165,6 +169,26 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="explicit" className="text-zinc-300">Explicit Content</Label>
+              <Select value={explicit || ''} onValueChange={(val) => setExplicit(val || undefined)}>
+                <SelectTrigger id="explicit" className="bg-zinc-900 border-zinc-800 text-zinc-100">
+                  <SelectValue placeholder="Select explicit content rating" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800">
+                  {EXPLICIT_TYPES.map((type) => (
+                    <SelectItem
+                      key={type}
+                      value={type}
+                      className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
+                    >
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

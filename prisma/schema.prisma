@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("POSTGRES_PRISMA_URL") // Uses connection pooling
+  url      = env("POSTGRES_URL_NON_POOLING") // Direct connection for local dev
   directUrl = env("POSTGRES_URL_NON_POOLING") // Uses direct connection for migrations
 }
 
@@ -31,6 +31,7 @@ model Song {
   aiContextUsed   String? @map("ai_context_used")
   aiEnergy        String? @map("ai_energy") @db.VarChar(20)
   aiAccessibility String? @map("ai_accessibility") @db.VarChar(20)
+  aiExplicit      String? @map("ai_explicit") @db.VarChar(20)
   aiSubgenre1     String? @map("ai_subgenre_1") @db.VarChar(100)
   aiSubgenre2     String? @map("ai_subgenre_2") @db.VarChar(100)
   aiSubgenre3     String? @map("ai_subgenre_3") @db.VarChar(100)

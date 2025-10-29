@@ -60,6 +60,7 @@ export function SongTable({ songs, onSongClick }: SongTableProps) {
               <th className="text-left p-4 text-sm text-zinc-400">Artist</th>
               <th className="text-left p-4 text-sm text-zinc-400">Energy</th>
               <th className="text-left p-4 text-sm text-zinc-400">Accessibility</th>
+              <th className="text-left p-4 text-sm text-zinc-400">Explicit</th>
               <th className="text-left p-4 text-sm text-zinc-400">Subgenres</th>
               <th className="text-left p-4 text-sm text-zinc-400">Status</th>
               <th className="text-center p-4 text-sm text-zinc-400">Reviewed</th>
@@ -96,6 +97,9 @@ export function SongTable({ songs, onSongClick }: SongTableProps) {
                 </td>
                 <td className="p-4">
                   <div className="text-zinc-400 text-sm">{song.ai_accessibility || '—'}</div>
+                </td>
+                <td className="p-4">
+                  <div className="text-zinc-400 text-sm">{song.ai_explicit || '—'}</div>
                 </td>
                 <td className="p-4">
                   <div className="text-zinc-400 text-sm max-w-xs">

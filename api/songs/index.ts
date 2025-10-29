@@ -41,6 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const reviewStatus = req.query.reviewStatus as string;
     const energy = req.query.energy as string;
     const accessibility = req.query.accessibility as string;
+    const explicit = req.query.explicit as string;
 
     // Build Prisma where clause
     const where: any = {};
@@ -78,6 +79,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       where.aiAccessibility = accessibility;
     }
 
+    // Explicit content filter
+    if (explicit && explicit !== 'all') {
+      where.aiExplicit = explicit;
+    }
+
     // Get total count for pagination
     const total = await prisma.song.count({ where });
     const totalPages = Math.ceil(total / limit);
@@ -108,6 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ai_context_used: song.aiContextUsed,
       ai_energy: song.aiEnergy,
       ai_accessibility: song.aiAccessibility,
+      ai_explicit: song.aiExplicit,
       ai_subgenre_1: song.aiSubgenre1,
       ai_subgenre_2: song.aiSubgenre2,
       ai_subgenre_3: song.aiSubgenre3,

@@ -1,9 +1,0 @@
-{
-  "inputCsv": "playlists/input/isrc_output",
-  "outputDir": "outputs",
-  "pollIntervalMs": 300000,
-  "model": "gemini-flash-latest",
-  "promptPath": "prompts/classification-prompt.md",
-  "testMode": false,
-  "testSongLimit": 50
-}

@@ -20,6 +20,7 @@ export interface Song {
   ai_context_used: string | null;
   ai_energy: string | null;
   ai_accessibility: string | null;
+  ai_explicit: string | null;
   ai_subgenre_1: string | null;
   ai_subgenre_2: string | null;
   ai_subgenre_3: string | null;
@@ -51,11 +52,13 @@ export interface GetSongsParams {
   reviewStatus?: string;
   energy?: string;
   accessibility?: string;
+  explicit?: string;
 }
 
 export interface UpdateSongPayload {
   ai_energy: string;
   ai_accessibility: string;
+  ai_explicit?: string | null;
   ai_subgenre_1: string;
   ai_subgenre_2?: string | null;
   ai_subgenre_3?: string | null;
