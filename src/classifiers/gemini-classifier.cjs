@@ -64,7 +64,12 @@ async function classifySong(artist, title, metadata = {}) {
     const model = genAI.getGenerativeModel({
       model: GEMINI_MODEL,
       systemInstruction: SYSTEM_INSTRUCTION,
-      tools: [{ googleSearch: {} }]  // Enable web search
+      tools: [{ googleSearch: {} }],  // Enable web search
+      generationConfig: {
+        temperature: 0.3,
+        candidateCount: 1
+        // No maxOutputTokens limit - let Gemini finish responses naturally
+      }
     });
 
     const prompt = buildPrompt(artist, title, metadata);
@@ -155,16 +160,18 @@ function buildPrompt(artist, title, metadata) {
     prompt += `Pre-analyzed Energy: ${metadata.energy}\n`;
   }
 
-  prompt += `\nProvide your classification in the following JSON format:\n`;
+  prompt += `\nIMPORTANT: You MUST return a complete, valid JSON object. Do not truncate your response.\n`;
+  prompt += `Provide ONLY this JSON format (no extra text before or after):\n`;
   prompt += `{\n`;
   prompt += `  "energy": "Very Low|Low|Medium|High|Very High",\n`;
   prompt += `  "accessibility": "Eclectic|Timeless|Commercial|Cheesy",\n`;
   prompt += `  "subgenre1": "Primary subgenre",\n`;
-  prompt += `  "subgenre2": "Secondary subgenre (or null)",\n`;
-  prompt += `  "subgenre3": "Tertiary subgenre (or null)",\n`;
-  prompt += `  "reasoning": "Brief explanation of your classification",\n`;
-  prompt += `  "context_used": "Summary of web search findings used for classification"\n`;
+  prompt += `  "subgenre2": "Secondary subgenre or null",\n`;
+  prompt += `  "subgenre3": "Tertiary subgenre or null",\n`;
+  prompt += `  "reasoning": "Brief explanation (2-3 sentences max)",\n`;
+  prompt += `  "context_used": "Key web findings (1 sentence)"\n`;
   prompt += `}\n`;
+  prompt += `\nEnsure your response is valid JSON with all fields present and closing braces.\n`;
 
   return prompt;
 }
@@ -177,13 +184,10 @@ function parseGeminiResponse(responseText) {
     // Remove markdown code blocks if present
     let jsonText = responseText.trim();
 
-    // Handle ```json wrapper
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    }
-    // Handle ``` wrapper
-    else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    // Extract JSON from response (handle text before/after JSON block)
+    const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```|```\s*([\s\S]*?)\s*```|\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonText = jsonMatch[1] || jsonMatch[2] || jsonMatch[0];
     }
 
     const parsed = JSON.parse(jsonText);

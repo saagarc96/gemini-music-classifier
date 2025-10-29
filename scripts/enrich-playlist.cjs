@@ -300,11 +300,15 @@ function loadCSV(csvPath) {
     fs.createReadStream(csvPath)
       .pipe(csv())
       .on('data', (row) => {
+        // Parse BPM as integer
+        const bpmValue = row.bpm || row.BPM;
+        const bpm = bpmValue ? parseInt(bpmValue, 10) : null;
+
         songs.push({
           isrc: row.isrc || row.ISRC,
           title: row.title || row.Title,
           artist: row.artist || row.Artist,
-          bpm: row.bpm || row.BPM || null,
+          bpm: bpm,
           energy: row.energy || row.Energy || null,
           subgenre: row.subgenre || row.Subgenre || null,
           artwork: row.artwork || row.Artwork || null,
