@@ -12,11 +12,13 @@ This project processes music playlists from the `isrc_output` directory, classif
 
 ## Features
 
+- **Real-Time Enrichment**: Fast CSV enrichment with Gemini + Parallel AI (~5-10 min for 200 songs)
+- **Multi-Source Merging**: Intelligent fuzzy matching with priority-based field resolution
 - **Batch Processing**: 50% cost discount with 12-24 hour turnaround
-- **Playlist-by-Playlist**: Process 5-6 playlists per day to manage quota limits
+- **Review Interface**: React + TypeScript web app for human curation
 - **Progress Tracking**: Automatic tracking of completed playlists
 - **BrainTrust Integration**: All processing logged for quality assessment
-- **Rate Limit Management**: Built-in delays between submissions
+- **Database Layer**: Prisma ORM with Postgres for persistent storage
 
 ## Quick Start
 
@@ -24,28 +26,46 @@ This project processes music playlists from the `isrc_output` directory, classif
 
 ```bash
 npm install
+vercel env pull .env.local  # Pull database credentials
 ```
 
-### 2. Set API Key
+### 2. Set API Keys
 
-Create a `.env` file:
+Edit `.env`:
 ```bash
-GOOGLE_AI_STUDIO_API_KEY=your_api_key_here
+GEMINI_API_KEY=your_gemini_key
+PARALLEL_AI_API_KEY=your_parallel_ai_key
+BRAINTRUST_API_KEY=your_braintrust_key  # Optional
 ```
 
-### 3. Process a Playlist
+### 3. Enrich a Playlist (Recommended)
 
 ```bash
-# List available playlists
-node src/playlist-batch-runner.js
-
-# Process a specific playlist
-node src/playlist-batch-runner.js "Afterwork Jazz - Downtime"
+# Fast real-time processing
+npm run enrich:playlist playlists/input/my-playlist.csv
 ```
 
-### 4. Monitor Progress
+### 4. Merge with Cache Data
 
-The system automatically tracks completed playlists in `playlists/processed/completed.json`.
+```bash
+# Merge enriched data with existing 13,428-song cache
+npm run merge:sources
+
+# View results
+cat outputs/merge-report.json | jq '.summary'
+```
+
+### 5. Review Interface (Optional)
+
+```bash
+# Terminal 1: Backend
+vercel dev --listen 3001
+
+# Terminal 2: Frontend
+cd client && npm run dev
+
+# Access at http://localhost:3000
+```
 
 ## Project Structure
 
@@ -121,15 +141,38 @@ Edit `config/default.json`:
 
 **Best Practice**: Space submissions 2-4 hours apart, process 5-6 playlists/day.
 
-## Merging Results
+## Workflows
 
-After processing multiple playlists:
+### CSV Enrichment + Merging (Recommended)
 
 ```bash
-npm run merge
+# Step 1: Enrich playlist
+npm run enrich:playlist playlists/input/my-playlist.csv
+
+# Step 2: Merge with 13K cache masterlist
+npm run merge:sources
+
+# Step 3: Review quality
+cat outputs/merge-report.json | jq '.fuzzy_match_statistics'
+
+# Step 4: Check output
+head -n 10 outputs/merged-data.csv
 ```
 
-This combines all `outputs/by-playlist/*.csv` into `outputs/merged/all-classifications.csv`.
+**Match Modes**:
+- `--mode=conservative`: High precision (90%+ similarity)
+- `--mode=balanced`: Default (85%+ similarity)
+- `--mode=aggressive`: High recall (75-80%+ similarity)
+
+See `docs/MERGE-GUIDE.md` for complete documentation.
+
+### Legacy Batch Processing
+
+After processing multiple playlists via batch API:
+
+```bash
+npm run merge  # Combines outputs/by-playlist/*.csv
+```
 
 ## Troubleshooting
 

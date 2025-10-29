@@ -53,6 +53,30 @@ npm run enrich:playlist playlist.csv --explicit-only      # Only run explicit ch
 - Parallel AI explicit content detection
 - No 12-24 hour wait
 
+### Data Merging (Multi-Source Integration)
+
+Merge enriched data with existing cache masterlist (13,428 songs with user corrections and explicit ratings):
+
+```bash
+# Merge with auto-detected latest enriched file
+npm run merge:sources
+
+# Specify custom files and options
+node scripts/merge-data-sources.cjs --cache=path/to/cache.csv --enriched=path/to/enriched.csv --mode=balanced
+
+# Match modes: conservative (strict), balanced (default), aggressive (loose)
+node scripts/merge-data-sources.cjs --mode=conservative
+```
+
+**What it does:**
+1. Loads cache masterlist (13,428 songs) and enriched data
+2. Matches songs via ISRC (exact) or fuzzy matching on Artist+Title
+3. Merges data with priority: User corrections > Cache explicit > Gemini > Original
+4. Exports unified CSV with provenance tracking
+5. Generates detailed merge report with quality metrics
+
+**See `docs/MERGE-GUIDE.md` for complete documentation**
+
 ### Batch Processing Workflows (Legacy)
 
 These scripts use the old Gemini Batch API approach (slower, no explicit content):
@@ -406,11 +430,101 @@ This enables success rate tracking, error analysis, and classification quality r
 3. Check browser console for API errors
 4. Verify `.env.local` has correct database credentials
 
+## Troubleshooting & Solutions
+
+### Gemini SDK Issues (CRITICAL - Fixed October 2025)
+
+**Problem**: Response truncation, parsing failures, ~60% error rate
+**Root Cause**: Wrong SDK package being used
+
+The enrichment pipeline MUST use `@google/genai` (v1.3.0+), NOT `@google/generative-ai` (v0.21.0).
+
+**Correct Implementation** (`src/classifiers/gemini-classifier.cjs`):
+```javascript
+const { GoogleGenAI } = require('@google/genai');  // ✓ CORRECT
+
+const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+// Build structured config (required format)
+const config = {
+  thinkingConfig: { thinkingBudget: 0 },
+  tools: [{ googleSearch: {} }],
+  systemInstruction: [{ text: SYSTEM_INSTRUCTION }],  // Array of objects
+  generationConfig: {
+    temperature: 0.3,
+    candidateCount: 1,
+    maxOutputTokens: 2048
+  }
+};
+
+// Call API with structured format
+const result = await genAI.models.generateContent({
+  model: 'gemini-flash-latest',
+  config,
+  contents: [{ role: 'user', parts: [{ text: prompt }] }]
+});
+
+const responseText = result.text || '';  // Direct property access
+```
+
+**Wrong Implementation** (causes truncation):
+```javascript
+const { GoogleGenerativeAI } = require('@google/generative-ai');  // ✗ WRONG
+
+const model = genAI.getGenerativeModel({
+  model: 'gemini-flash-latest',
+  systemInstruction: SYSTEM_INSTRUCTION,  // String format (unreliable)
+});
+
+const result = await model.generateContent(prompt);  // Simple call
+const responseText = result.response.text();  // Method call
+```
+
+**Parser Fix**: Handle both array and individual field formats:
+```javascript
+// System instruction returns: "subgenres": ["Genre1", "Genre2", "Genre3"]
+// Parser must extract to: subgenre1, subgenre2, subgenre3
+
+if (parsed.subgenres && Array.isArray(parsed.subgenres)) {
+  subgenre1 = parsed.subgenres[0] || null;
+  subgenre2 = parsed.subgenres[1] || null;
+  subgenre3 = parsed.subgenres[2] || null;
+}
+```
+
+**Commits with fixes**:
+- `55d01f9`: BPM parsing and preliminary improvements
+- `87ba019`: SDK migration and subgenre array parser (100% success achieved)
+
+### Data Quality & Integration
+
+**Analyze existing data before processing**:
+```bash
+npm run analyze:quality
+```
+
+This shows:
+- 13,427 songs in cache masterlist
+- 7,678 songs with existing explicit scores ($76.78 Parallel AI cost savings)
+- 1,953 user-corrected records (authoritative data)
+- 5,843 songs need fuzzy matching (no ISRC)
+- 119 potential duplicates to review
+
+**Key Insights**:
+- **56.48% have ISRCs** (exact matching)
+- **43.52% need fuzzy matching** (Artist+Title)
+- **57.18% have explicit scores** already
+- **14.5% are user-corrected** (highest priority data)
+
 ## Utilities
 
 `scripts/merge-results.js`: Combines all `outputs/by-playlist/*.csv` into `outputs/merged/all-classifications.csv`
 
 `scripts/check-quota.js`: Displays current API quota usage and remaining capacity
+
+`scripts/analyze-data-quality.cjs`: Comprehensive data quality dashboard with metrics and cost savings
+
+`scripts/merge-data-sources.cjs`: Multi-source data merger with fuzzy matching (see `docs/MERGE-GUIDE.md`)
 
 ## Prisma Database Layer (NEW)
 

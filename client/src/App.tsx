@@ -123,24 +123,24 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="h-screen flex flex-col bg-zinc-950">
       <Toaster position="top-right" />
-      
+
       {/* Header */}
-      <header className="border-b border-zinc-800 bg-zinc-900">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+      <header className="flex-shrink-0 border-b border-zinc-800 bg-zinc-900">
+        <div className="px-6 py-3">
           <div className="flex items-center gap-3">
             <Music className="w-6 h-6 text-blue-500" />
             <div>
-              <h1 className="text-zinc-100">Raina Music Classification Review</h1>
-              <p className="text-sm text-zinc-400">AI Classification Review System</p>
+              <h1 className="text-lg text-zinc-100">Raina Music Classification Review</h1>
+              <p className="text-xs text-zinc-400">AI Classification Review System</p>
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+      <main className="flex-1 overflow-auto px-6 py-4 space-y-4">
         <FilterPanel
           selectedSubgenre={selectedSubgenre}
           selectedStatus={selectedStatus}

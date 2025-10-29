@@ -15,6 +15,8 @@
     "process:all": "node src/orchestrator.js",
     "monitor": "node src/monitor-batch-job.js",
     "merge": "node scripts/merge-results.js",
+    "merge:sources": "node scripts/merge-data-sources.cjs",
+    "analyze:quality": "node scripts/analyze-data-quality.cjs",
     "check-quota": "node scripts/check-quota.js",
     "postinstall": "prisma generate"
   },
@@ -42,6 +44,7 @@
     "csv-stringify": "^6.5.2",
     "csv-writer": "^1.6.0",
     "dotenv": "^16.4.5",
+    "fastest-levenshtein": "^1.0.16",
     "prisma": "^6.18.0"
   },
   "devDependencies": {
