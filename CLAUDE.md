@@ -144,6 +144,7 @@ cd client && npm install && cd ..
 - Endpoints:
   - `GET /api/songs` - Paginated list with filters
   - `PATCH /api/songs/:isrc` - Update classifications
+  - `GET /api/songs/export` - Export to CSV with filtering (✅ NEW)
 
 **Database Schema** (`prisma/schema.prisma`):
 - `Song` model with 20+ fields (ISRC, metadata, AI classifications, review tracking)
@@ -158,6 +159,8 @@ cd client && npm install && cd ..
 - Inline editing with validation
 - Curator notes
 - Automatic timestamp tracking
+- CSV export with configurable columns (✅ NEW)
+- Song selection for selective export (✅ NEW)
 
 ### Batch Processing Pipeline
 
@@ -269,15 +272,19 @@ POSTGRES_URL=postgres://...                 # Default connection
 ```
 # Review Interface (NEW)
 api/
+├── lib/
+│   └── csv-exporter.ts        # CSV generation utility (NEW)
 └── songs/
     ├── index.ts               # GET /api/songs (list with filters)
-    └── [isrc].ts              # PATCH /api/songs/:isrc (update)
+    ├── [isrc].ts              # PATCH /api/songs/:isrc (update)
+    └── export.ts              # GET /api/songs/export (CSV download) (NEW)
 
 client/                        # React frontend
 ├── src/
 │   ├── components/
-│   │   ├── FilterPanel.tsx   # 243 subgenres, 5 filter types
-│   │   ├── SongTable.tsx     # Paginated table
+│   │   ├── FilterPanel.tsx   # 243 subgenres, 5 filter types, Export button (NEW)
+│   │   ├── SongTable.tsx     # Paginated table, checkboxes for selection (NEW)
+│   │   ├── ExportModal.tsx   # CSV export UI with preview (NEW)
 │   │   ├── ReviewModal.tsx   # Edit interface
 │   │   ├── AudioPlayer.tsx   # S3 streaming
 │   │   └── ui/               # shadcn/ui library (50+ components)
@@ -339,6 +346,72 @@ Google Gemini Batch API has these limits:
 - Process 5-6 playlists per day
 - Monitor quota at https://aistudio.google.com/usage
 - Use test mode (`testSongLimit: 50`) for validation
+
+## CSV Export Feature (NEW)
+
+The review interface includes a powerful CSV export capability for data migration and analysis:
+
+### Export API Endpoint
+
+**GET /api/songs/export** - Export songs to CSV format with optional filtering
+
+**Query Parameters:**
+- `subgenre` - Filter by subgenre (searches aiSubgenre1/2/3)
+- `status` - Filter by aiStatus (SUCCESS, ERROR, etc.)
+- `reviewStatus` - Filter by review status (all, reviewed, unreviewed)
+- `energy` - Filter by aiEnergy level
+- `accessibility` - Filter by aiAccessibility
+- `explicit` - Filter by aiExplicit content
+- `playlistName` - Optional playlist name prepended to subgenres (for legacy format)
+- `includeAccessibility` - Include ACCESSIBILITY column (default: true)
+- `includeExplicit` - Include EXPLICIT column (default: true)
+- `preview` - Return first 5 rows as JSON (default: false)
+- `isrcs` - Comma-separated list of specific ISRCs to export
+
+**Response:**
+- CSV file download with UTF-8 BOM encoding for Excel compatibility
+- Or JSON preview when preview=true
+
+### Export Modal UI Features
+
+The ExportModal component (`client/src/components/ExportModal.tsx`) provides:
+
+1. **Song Selection** - Checkbox interface to select/deselect individual songs or entire page
+2. **Filter-Based Export** - Export all songs matching current filter criteria
+3. **Selection-Based Export** - Export only selected songs when checkboxes are checked
+4. **Dynamic Preview** - Real-time CSV preview showing first 5 rows with proper parsing
+5. **Configurable Columns** - Toggle ACCESSIBILITY and EXPLICIT columns on/off
+6. **Playlist Naming** - Optional playlist name prepended to subgenres for legacy format migration
+
+### Export Data Transformation
+
+The CSV exporter (`api/lib/csv-exporter.ts`) performs these transformations:
+
+- **Energy Capitalization** - "medium" → "Medium", "very high" → "Very High"
+- **Accessibility Uppercase** - "Timeless" → "TIMELESS"
+- **Explicit Mapping** - "Family Friendly" → "FAMILY", "Suggestive" → "SUGGESTIVE", "Explicit" → "EXPLICIT"
+- **Subgenre Formatting** - Semicolon-separated with optional playlist name prefix
+- **BPM Defaults** - Default to 100 when BPM is missing
+- **CSV Escaping** - Proper handling of quotes, commas, newlines
+
+### Export Workflow
+
+1. User clicks "Export CSV" button in FilterPanel
+2. ExportModal opens with current filters
+3. User can:
+   - Enter optional playlist name
+   - Toggle column visibility
+   - Select specific songs (overrides filters)
+   - Preview first 5 rows
+4. Click "Download Selected" or "Download CSV" to export
+5. Browser downloads timestamped CSV file (e.g., `music-export-2025-10-29.csv`)
+
+### Integration Points
+
+- **Selection State** - App.tsx maintains selectedIsrcs Set across pagination
+- **Filter State** - Current filters passed to ExportModal for preview
+- **API Client** - ExportModal constructs query parameters for /api/songs/export
+- **CSV Parsing** - PapaParse library used for real-time preview parsing
 
 ## Classification Prompt
 
