@@ -3,6 +3,7 @@ import { Music } from 'lucide-react';
 import { FilterPanel } from './components/FilterPanel';
 import { SongTable } from './components/SongTable';
 import { ReviewModal } from './components/ReviewModal';
+import { ExportModal } from './components/ExportModal';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { getSongs, updateSong, Song, UpdateSongPayload } from './lib/api';
@@ -11,6 +12,7 @@ export default function App() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Filter states
@@ -20,6 +22,9 @@ export default function App() {
   const [selectedEnergy, setSelectedEnergy] = useState('all');
   const [selectedAccessibility, setSelectedAccessibility] = useState('all');
   const [selectedExplicit, setSelectedExplicit] = useState('all');
+
+  // Selection state
+  const [selectedIsrcs, setSelectedIsrcs] = useState<Set<string>>(new Set());
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -122,6 +127,37 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleToggleSelection = (isrc: string) => {
+    setSelectedIsrcs(prev => {
+      const next = new Set(prev);
+      if (next.has(isrc)) {
+        next.delete(isrc);
+      } else {
+        next.add(isrc);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleAll = () => {
+    const allSelected = songs.length > 0 && songs.every(song => selectedIsrcs.has(song.isrc));
+    if (allSelected) {
+      // Deselect all on current page
+      setSelectedIsrcs(prev => {
+        const next = new Set(prev);
+        songs.forEach(song => next.delete(song.isrc));
+        return next;
+      });
+    } else {
+      // Select all on current page
+      setSelectedIsrcs(prev => {
+        const next = new Set(prev);
+        songs.forEach(song => next.add(song.isrc));
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950">
       <Toaster position="top-right" />
@@ -172,6 +208,7 @@ export default function App() {
             setSelectedExplicit(value);
             setCurrentPage(1);
           }}
+          onExport={() => setIsExportModalOpen(true)}
           totalCount={totalSongs}
         />
 
@@ -182,7 +219,13 @@ export default function App() {
           </div>
         ) : (
           <>
-            <SongTable songs={songs} onSongClick={handleSongClick} />
+            <SongTable
+              songs={songs}
+              selectedIsrcs={selectedIsrcs}
+              onSongClick={handleSongClick}
+              onToggleSelection={handleToggleSelection}
+              onToggleAll={handleToggleAll}
+            />
 
             {/* Pagination */}
             {totalPages > 1 && (
@@ -239,6 +282,22 @@ export default function App() {
         onClose={handleModalClose}
         onSave={handleSave}
         onNext={handleNext}
+      />
+
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        currentFilters={{
+          subgenre: selectedSubgenre !== 'all' ? selectedSubgenre : undefined,
+          status: selectedStatus !== 'all' ? selectedStatus : undefined,
+          reviewStatus: selectedReviewStatus !== 'all' ? selectedReviewStatus : undefined,
+          energy: selectedEnergy !== 'all' ? selectedEnergy : undefined,
+          accessibility: selectedAccessibility !== 'all' ? selectedAccessibility : undefined,
+          explicit: selectedExplicit !== 'all' ? selectedExplicit : undefined,
+        }}
+        totalSongs={totalSongs}
+        selectedIsrcs={selectedIsrcs}
       />
     </div>
   );

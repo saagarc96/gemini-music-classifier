@@ -1,14 +1,20 @@
 import { Check, X, AlertCircle } from 'lucide-react';
 import { Song } from '../data/mockSongs';
 import { Badge } from './ui/badge';
+import { Checkbox } from './ui/checkbox';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 
 interface SongTableProps {
   songs: Song[];
+  selectedIsrcs: Set<string>;
   onSongClick: (song: Song) => void;
+  onToggleSelection: (isrc: string) => void;
+  onToggleAll: () => void;
 }
 
-export function SongTable({ songs, onSongClick }: SongTableProps) {
+export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection, onToggleAll }: SongTableProps) {
+  const allSelected = songs.length > 0 && songs.every(song => selectedIsrcs.has(song.isrc));
+  const someSelected = songs.some(song => selectedIsrcs.has(song.isrc)) && !allSelected;
   const getStatusBadge = (status: Song['ai_status']) => {
     switch (status) {
       case 'SUCCESS':
@@ -55,6 +61,14 @@ export function SongTable({ songs, onSongClick }: SongTableProps) {
         <table className="w-full">
           <thead>
             <tr className="border-b border-zinc-800">
+              <th className="w-12 p-4">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={onToggleAll}
+                  aria-label="Select all songs"
+                  className={someSelected ? "data-[state=checked]:bg-blue-600" : ""}
+                />
+              </th>
               <th className="text-left p-4 text-sm text-zinc-400">Artwork</th>
               <th className="text-left p-4 text-sm text-zinc-400">Title</th>
               <th className="text-left p-4 text-sm text-zinc-400">Artist</th>
@@ -70,10 +84,16 @@ export function SongTable({ songs, onSongClick }: SongTableProps) {
             {songs.map((song) => (
               <tr
                 key={song.id}
-                onClick={() => onSongClick(song)}
-                className="border-b border-zinc-800 hover:bg-zinc-800/50 cursor-pointer transition-colors"
+                className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors"
               >
-                <td className="p-4">
+                <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selectedIsrcs.has(song.isrc)}
+                    onCheckedChange={() => onToggleSelection(song.isrc)}
+                    aria-label={`Select ${song.title}`}
+                  />
+                </td>
+                <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   {song.artwork ? (
                     <ImageWithFallback
                       src={song.artwork}
@@ -86,32 +106,32 @@ export function SongTable({ songs, onSongClick }: SongTableProps) {
                     </div>
                   )}
                 </td>
-                <td className="p-4">
+                <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   <div className="text-zinc-100 max-w-xs truncate">{song.title}</div>
                 </td>
-                <td className="p-4">
+                <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   <div className="text-zinc-300 max-w-xs truncate">{song.artist}</div>
                 </td>
-                <td className="p-4">
+                <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   <div className="text-zinc-400 text-sm">{song.ai_energy || '—'}</div>
                 </td>
-                <td className="p-4">
+                <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   <div className="text-zinc-400 text-sm">{song.ai_accessibility || '—'}</div>
                 </td>
-                <td className="p-4">
+                <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   <div className="text-zinc-400 text-sm">{song.ai_explicit || '—'}</div>
                 </td>
-                <td className="p-4">
+                <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   <div className="text-zinc-400 text-sm max-w-xs">
                     {[song.ai_subgenre_1, song.ai_subgenre_2, song.ai_subgenre_3]
                       .filter(Boolean)
                       .join(', ') || '—'}
                   </div>
                 </td>
-                <td className="p-4">
+                <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   {getStatusBadge(song.ai_status)}
                 </td>
-                <td className="p-4 text-center">
+                <td className="p-4 text-center cursor-pointer" onClick={() => onSongClick(song)}>
                   {song.reviewed ? (
                     <Check className="w-5 h-5 text-emerald-400 mx-auto" />
                   ) : (

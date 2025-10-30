@@ -1,4 +1,6 @@
+import { FileDown } from 'lucide-react';
 import { Label } from './ui/label';
+import { Button } from './ui/button';
 import {
   Select,
   SelectContent,
@@ -21,6 +23,7 @@ interface FilterPanelProps {
   onEnergyChange: (value: string) => void;
   onAccessibilityChange: (value: string) => void;
   onExplicitChange: (value: string) => void;
+  onExport: () => void;
   totalCount: number;
 }
 
@@ -37,15 +40,28 @@ export function FilterPanel({
   onEnergyChange,
   onAccessibilityChange,
   onExplicitChange,
+  onExport,
   totalCount,
 }: FilterPanelProps) {
   return (
     <div className="bg-zinc-900 rounded-lg p-6 border border-zinc-800">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-zinc-100">Filters</h2>
-        <span className="text-sm text-zinc-400">
-          Showing {totalCount} {totalCount === 1 ? 'song' : 'songs'}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-zinc-400">
+            Showing {totalCount} {totalCount === 1 ? 'song' : 'songs'}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onExport}
+            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            disabled={totalCount === 0}
+          >
+            <FileDown className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
