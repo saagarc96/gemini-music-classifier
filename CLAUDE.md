@@ -53,6 +53,35 @@ npm run enrich:playlist playlist.csv --explicit-only      # Only run explicit ch
 - Parallel AI explicit content detection
 - No 12-24 hour wait
 
+### Curator CSV Enrichment Workflow (NEW)
+
+For importing curator-reviewed CSVs with missing ISRCs or metadata:
+
+```bash
+# Step 1: Merge curator CSV with ISRCs and enrich missing fields
+node scripts/merge-and-enrich-curator-csvs.cjs curator.csv \
+  --isrc-source=isrc_output/playlist_formatted.csv
+
+# Step 2: Import enriched CSV to database with audio links
+node scripts/import-curator-to-db.cjs enriched-output.csv \
+  --audio-source=isrc_output/_updated.csv
+
+# Optional: Dry run to preview import
+node scripts/import-curator-to-db.cjs enriched.csv \
+  --audio-source=_updated.csv --dry-run
+```
+
+**What it does:**
+1. Matches curator songs to ISRC database by Artist + Title (fuzzy matching)
+2. Enriches missing ACCESSIBILITY/EXPLICIT via Gemini + Parallel AI APIs
+3. Preserves all existing curator data (energy, subgenres, BPM)
+4. Imports to database with audio links, artwork, and reviewed=true status
+5. Normalizes accessibility values to Title Case for UI consistency
+
+**Utilities:**
+- `scripts/verify-import.cjs` - Check import stats and sample data
+- `scripts/check-song-data.cjs` - Inspect specific song values
+
 ### Batch Processing Workflows (Legacy)
 
 These scripts use the old Gemini Batch API approach (slower, no explicit content):
@@ -478,6 +507,16 @@ This enables success rate tracking, error analysis, and classification quality r
 2. Is database seeded? (`npm run seed` should show 50 successful inserts)
 3. Check browser console for API errors
 4. Verify `.env.local` has correct database credentials
+
+**Empty Dropdown Values**: If dropdowns appear empty when editing songs:
+- Cause: Case mismatch between database values and frontend constants
+- Example: Database has "TIMELESS" (UPPERCASE) but constants have "Timeless" (Title Case)
+- React Select requires exact string match between value and options
+- Fix: Normalize all values to Title Case for consistency
+  - Update constants in `client/src/data/constants.ts`
+  - Run database migration to normalize existing values
+  - Update import scripts to use Title Case (`scripts/import-curator-to-db.cjs`)
+- Current standard: All dropdown values use Title Case ("Eclectic", "High", "Family Friendly")
 
 ## Utilities
 
