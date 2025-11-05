@@ -11,6 +11,7 @@
  *   - reviewStatus: Filter by reviewed (all, reviewed, unreviewed)
  *   - energy: Filter by aiEnergy
  *   - accessibility: Filter by aiAccessibility
+ *   - search: Search by artist, title, or ISRC (case-insensitive partial match)
  *
  * Response:
  *   {
@@ -42,17 +43,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const energy = req.query.energy as string;
     const accessibility = req.query.accessibility as string;
     const explicit = req.query.explicit as string;
+    const search = req.query.search as string;
 
     // Build Prisma where clause
     const where: any = {};
+    const andConditions: any[] = [];
 
     // Subgenre filter (searches across all 3 subgenre columns)
     if (subgenre && subgenre !== 'all') {
-      where.OR = [
-        { aiSubgenre1: subgenre },
-        { aiSubgenre2: subgenre },
-        { aiSubgenre3: subgenre },
-      ];
+      andConditions.push({
+        OR: [
+          { aiSubgenre1: subgenre },
+          { aiSubgenre2: subgenre },
+          { aiSubgenre3: subgenre },
+        ]
+      });
+    }
+
+    // Search filter (searches artist, title, and ISRC)
+    if (search && search.trim()) {
+      const searchTerm = search.trim();
+      andConditions.push({
+        OR: [
+          { artist: { contains: searchTerm, mode: 'insensitive' } },
+          { title: { contains: searchTerm, mode: 'insensitive' } },
+          { isrc: { contains: searchTerm, mode: 'insensitive' } },
+        ]
+      });
     }
 
     // Status filter
@@ -82,6 +99,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Explicit content filter
     if (explicit && explicit !== 'all') {
       where.aiExplicit = explicit;
+    }
+
+    // Combine AND conditions if any exist
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
     }
 
     // Get total count for pagination

@@ -53,6 +53,7 @@ export interface GetSongsParams {
   energy?: string;
   accessibility?: string;
   explicit?: string;
+  search?: string;
 }
 
 export interface UpdateSongPayload {

@@ -22,6 +22,7 @@ export default function App() {
   const [selectedEnergy, setSelectedEnergy] = useState('all');
   const [selectedAccessibility, setSelectedAccessibility] = useState('all');
   const [selectedExplicit, setSelectedExplicit] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Selection state
   const [selectedIsrcs, setSelectedIsrcs] = useState<Set<string>>(new Set());
@@ -35,7 +36,7 @@ export default function App() {
   // Fetch songs when filters or page changes
   useEffect(() => {
     fetchSongs();
-  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, currentPage]);
+  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, searchQuery, currentPage]);
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -49,6 +50,7 @@ export default function App() {
         energy: selectedEnergy !== 'all' ? selectedEnergy : undefined,
         accessibility: selectedAccessibility !== 'all' ? selectedAccessibility : undefined,
         explicit: selectedExplicit !== 'all' ? selectedExplicit : undefined,
+        search: searchQuery.trim() || undefined,
       });
 
       setSongs(response.data);
@@ -184,6 +186,7 @@ export default function App() {
           selectedEnergy={selectedEnergy}
           selectedAccessibility={selectedAccessibility}
           selectedExplicit={selectedExplicit}
+          searchQuery={searchQuery}
           onSubgenreChange={(value) => {
             setSelectedSubgenre(value);
             setCurrentPage(1); // Reset to page 1 on filter change
@@ -206,6 +209,10 @@ export default function App() {
           }}
           onExplicitChange={(value) => {
             setSelectedExplicit(value);
+            setCurrentPage(1);
+          }}
+          onSearchChange={(value) => {
+            setSearchQuery(value);
             setCurrentPage(1);
           }}
           onExport={() => setIsExportModalOpen(true)}

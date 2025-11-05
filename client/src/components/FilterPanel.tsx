@@ -1,6 +1,7 @@
-import { FileDown } from 'lucide-react';
+import { FileDown, Search } from 'lucide-react';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import {
   Select,
   SelectContent,
@@ -17,12 +18,14 @@ interface FilterPanelProps {
   selectedEnergy: string;
   selectedAccessibility: string;
   selectedExplicit: string;
+  searchQuery: string;
   onSubgenreChange: (value: string) => void;
   onStatusChange: (value: string) => void;
   onReviewStatusChange: (value: string) => void;
   onEnergyChange: (value: string) => void;
   onAccessibilityChange: (value: string) => void;
   onExplicitChange: (value: string) => void;
+  onSearchChange: (value: string) => void;
   onExport: () => void;
   totalCount: number;
 }
@@ -34,12 +37,14 @@ export function FilterPanel({
   selectedEnergy,
   selectedAccessibility,
   selectedExplicit,
+  searchQuery,
   onSubgenreChange,
   onStatusChange,
   onReviewStatusChange,
   onEnergyChange,
   onAccessibilityChange,
   onExplicitChange,
+  onSearchChange,
   onExport,
   totalCount,
 }: FilterPanelProps) {
@@ -61,6 +66,20 @@ export function FilterPanel({
             <FileDown className="w-4 h-4 mr-2" />
             Export CSV
           </Button>
+        </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Input
+            type="text"
+            placeholder="Search by artist, title, or ISRC..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pl-10 bg-zinc-950 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+          />
         </div>
       </div>
 
