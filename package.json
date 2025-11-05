@@ -16,6 +16,8 @@
     "monitor": "node src/monitor-batch-job.js",
     "merge": "node scripts/merge-results.js",
     "check-quota": "node scripts/check-quota.js",
+    "generate:constants": "node scripts/generate-frontend-constants.cjs",
+    "validate:subgenres": "node scripts/validate-subgenres.cjs",
     "postinstall": "prisma generate"
   },
   "keywords": [

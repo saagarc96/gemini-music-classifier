@@ -39,18 +39,9 @@ if (process.env.BRAINTRUST_API_KEY) {
   console.warn('[BrainTrust] API key not set, logging disabled');
 }
 
-// Load system instruction once at module load
-const SYSTEM_INSTRUCTION = loadSystemInstruction();
-
-function loadSystemInstruction() {
-  const promptPath = path.join(__dirname, '../../prompts/classification-prompt.md');
-  try {
-    return fs.readFileSync(promptPath, 'utf8');
-  } catch (error) {
-    console.error(`[Gemini] Failed to load system instruction from ${promptPath}:`, error.message);
-    throw new Error('System instruction file not found');
-  }
-}
+// Load system instruction with subgenres injected
+const { loadClassificationPrompt } = require('../utils/subgenre-loader.cjs');
+const SYSTEM_INSTRUCTION = loadClassificationPrompt();
 
 /**
  * Classifies a song using Gemini API

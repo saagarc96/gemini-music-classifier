@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a music classification system that uses Google Gemini's Batch API to analyze songs from playlists, plus a web-based review interface for human curation. It classifies songs by:
 - Energy Level (Very Low → Very High)
 - Accessibility (Eclectic / Timeless / Commercial / Cheesy)
-- Subgenres (from a curated list of 243 subgenres)
+- Subgenres (from a curated list of 167 subgenres across 10 categories)
 
 The system is built for Raina Music, a B2B music streaming company serving hospitality and retail clients. It processes ~20,000 songs across 120 playlists at 50% cost discount via batch processing.
 
@@ -129,6 +129,47 @@ npm run seed             # Import 50 songs from CSV
 2. Frontend runs on `http://localhost:3000` (Vite dev server with HMR)
 3. Vite proxies `/api/*` requests to port 3001 (see `client/vite.config.ts:59-64`)
 4. Always start backend FIRST, then frontend
+
+### Managing Subgenres (NEW)
+
+Subgenres are stored in a single source of truth that automatically updates both the classification prompt and frontend UI.
+
+**File Structure:**
+- `data/subgenres.json` - **Single source of truth** (167 subgenres across 10 categories)
+- `prompts/classification-prompt.md` - Contains `{{SUBGENRES_LIST}}` placeholder (auto-injected at runtime)
+- `client/src/data/constants.ts` - Auto-generated TypeScript constants (DO NOT edit manually)
+- `src/utils/subgenre-loader.cjs` - Utility for loading and formatting subgenres
+
+**Adding/Removing Subgenres:**
+
+```bash
+# 1. Edit data/subgenres.json (maintain category structure)
+
+# 2. Validate the data
+npm run validate:subgenres
+
+# 3. Regenerate frontend constants
+npm run generate:constants
+
+# 4. Test classification (optional - subgenres auto-inject into prompt)
+node -e "const {loadClassificationPrompt} = require('./src/utils/subgenre-loader.cjs'); console.log(loadClassificationPrompt().substring(0, 500));"
+
+# 5. Commit both files
+git add data/subgenres.json client/src/data/constants.ts
+git commit -m "feat: add new subgenre XYZ"
+```
+
+**How It Works:**
+- Backend scripts (`src/classifiers/gemini-classifier.cjs`, `src/prepare-batch-input.js`) load the prompt with subgenres auto-injected at runtime via `loadClassificationPrompt()`
+- Frontend dropdowns use auto-generated constants from `client/src/data/constants.ts`
+- No manual synchronization needed - single source of truth ensures consistency
+
+**Benefits:**
+- ✅ Single source of truth (edit only `subgenres.json`)
+- ✅ Auto-generated frontend constants (no manual sync)
+- ✅ Validation prevents duplicates/errors
+- ✅ Backward compatible (same API, same prompt output)
+- ✅ Easy to add/remove subgenres
 
 ### Prisma (Database)
 

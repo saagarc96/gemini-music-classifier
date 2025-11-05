@@ -31,9 +31,9 @@ async function prepareBatchInput() {
 
   console.log(`${config.testMode ? '🧪 TEST MODE:' : '🚀 PRODUCTION:'} Processing ${songsToProcess.length} songs\n`);
 
-  // Load system instruction from prompt file
-  const promptPath = path.join(__dirname, '..', config.promptPath);
-  const systemInstruction = fs.readFileSync(promptPath, 'utf-8');
+  // Load system instruction with subgenres injected
+  const { loadClassificationPrompt } = require('./utils/subgenre-loader.cjs');
+  const systemInstruction = loadClassificationPrompt();
   console.log(`✓ Loaded classification prompt (${systemInstruction.length} chars)\n`);
 
   // Generate JSONL
