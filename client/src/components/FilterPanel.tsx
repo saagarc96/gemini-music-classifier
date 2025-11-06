@@ -1,4 +1,4 @@
-import { FileDown, Search } from 'lucide-react';
+import { FileDown } from 'lucide-react';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -71,16 +71,13 @@ export function FilterPanel({
 
       {/* Search Bar */}
       <div className="mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-zinc-400" />
-          <Input
-            type="text"
-            placeholder="Search by artist, title, or ISRC..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-10 bg-zinc-950 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
-          />
-        </div>
+        <Input
+          type="text"
+          placeholder="Search by artist, title, or ISRC..."
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="bg-zinc-950 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
