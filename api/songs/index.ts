@@ -60,15 +60,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Search filter (searches artist, title, and ISRC)
+    // Search filter (searches artist, title, and ISRC with AND logic)
     if (search && search.trim()) {
-      const searchTerm = search.trim();
-      andConditions.push({
-        OR: [
-          { artist: { contains: searchTerm, mode: 'insensitive' } },
-          { title: { contains: searchTerm, mode: 'insensitive' } },
-          { isrc: { contains: searchTerm, mode: 'insensitive' } },
-        ]
+      const searchTerms = search.trim().split(/\s+/); // Split by whitespace
+
+      // Each search term must match in at least one field (artist, title, or ISRC)
+      searchTerms.forEach(term => {
+        andConditions.push({
+          OR: [
+            { artist: { contains: term, mode: 'insensitive' } },
+            { title: { contains: term, mode: 'insensitive' } },
+            { isrc: { contains: term, mode: 'insensitive' } },
+          ]
+        });
       });
     }
 
