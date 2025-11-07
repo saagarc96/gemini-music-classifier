@@ -55,6 +55,8 @@ export interface GetSongsParams {
   accessibility?: string;
   explicit?: string;
   search?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface UpdateSongPayload {

@@ -24,6 +24,10 @@ export default function App() {
   const [selectedExplicit, setSelectedExplicit] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Sort states
+  const [sortBy, setSortBy] = useState<string>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
   // Selection state
   const [selectedIsrcs, setSelectedIsrcs] = useState<Set<string>>(new Set());
 
@@ -36,7 +40,7 @@ export default function App() {
   // Fetch songs when filters or page changes
   useEffect(() => {
     fetchSongs();
-  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, searchQuery, currentPage]);
+  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, searchQuery, currentPage, sortBy, sortOrder]);
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -51,6 +55,8 @@ export default function App() {
         accessibility: selectedAccessibility !== 'all' ? selectedAccessibility : undefined,
         explicit: selectedExplicit !== 'all' ? selectedExplicit : undefined,
         search: searchQuery.trim() || undefined,
+        sortBy,
+        sortOrder,
       });
 
       setSongs(response.data);
@@ -160,6 +166,19 @@ export default function App() {
     }
   };
 
+  const handleSort = (field: string) => {
+    if (sortBy === field) {
+      // Toggle sort order if clicking the same column
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new sort field with descending as default
+      setSortBy(field);
+      setSortOrder('desc');
+    }
+    // Reset to first page when changing sort
+    setCurrentPage(1);
+  };
+
   return (
     <div className="h-screen flex flex-col bg-zinc-950">
       <Toaster position="top-right" />
@@ -232,6 +251,9 @@ export default function App() {
               onSongClick={handleSongClick}
               onToggleSelection={handleToggleSelection}
               onToggleAll={handleToggleAll}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSort={handleSort}
             />
 
             {/* Pagination */}

@@ -10,11 +10,24 @@ interface SongTableProps {
   onSongClick: (song: Song) => void;
   onToggleSelection: (isrc: string) => void;
   onToggleAll: () => void;
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
+  onSort: (field: string) => void;
 }
 
-export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection, onToggleAll }: SongTableProps) {
+export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection, onToggleAll, sortBy, sortOrder, onSort }: SongTableProps) {
   const allSelected = songs.length > 0 && songs.every(song => selectedIsrcs.has(song.isrc));
   const someSelected = songs.some(song => selectedIsrcs.has(song.isrc)) && !allSelected;
+
+  const getSortIndicator = (field: string) => {
+    if (sortBy !== field) return null;
+    return (
+      <span className="ml-1 inline-block">
+        {sortOrder === 'asc' ? '↑' : '↓'}
+      </span>
+    );
+  };
+
   const getStatusBadge = (status: Song['ai_status']) => {
     switch (status) {
       case 'SUCCESS':
@@ -47,6 +60,16 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
     }
   };
 
+  const formatDate = (isoString: string | null) => {
+    if (!isoString) return '—';
+    const date = new Date(isoString);
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(date);
+  };
+
   if (songs.length === 0) {
     return (
       <div className="bg-zinc-900 rounded-lg p-12 border border-zinc-800 text-center">
@@ -77,6 +100,12 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
               <th className="text-left p-4 text-sm text-zinc-400">Explicit</th>
               <th className="text-left p-4 text-sm text-zinc-400">Subgenres</th>
               <th className="text-left p-4 text-sm text-zinc-400">Status</th>
+              <th
+                className="text-left p-4 text-sm text-zinc-400 cursor-pointer hover:text-zinc-200 transition-colors select-none"
+                onClick={() => onSort('createdAt')}
+              >
+                Date Added{getSortIndicator('createdAt')}
+              </th>
               <th className="text-center p-4 text-sm text-zinc-400">Reviewed</th>
             </tr>
           </thead>
@@ -130,6 +159,11 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
                 </td>
                 <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   {getStatusBadge(song.ai_status)}
+                </td>
+                <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
+                  <div className="text-zinc-400 text-sm">
+                    {formatDate(song.created_at)}
+                  </div>
                 </td>
                 <td className="p-4 text-center cursor-pointer" onClick={() => onSongClick(song)}>
                   {song.reviewed ? (

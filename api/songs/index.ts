@@ -12,6 +12,8 @@
  *   - energy: Filter by aiEnergy
  *   - accessibility: Filter by aiAccessibility
  *   - search: Search by artist, title, or ISRC (case-insensitive partial match)
+ *   - sortBy: Field to sort by (createdAt, title, artist, etc.) (default: createdAt)
+ *   - sortOrder: Sort direction (asc, desc) (default: desc)
  *
  * Response:
  *   {
@@ -44,6 +46,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const accessibility = req.query.accessibility as string;
     const explicit = req.query.explicit as string;
     const search = req.query.search as string;
+    const sortBy = (req.query.sortBy as string) || 'createdAt';
+    const sortOrder = (req.query.sortOrder as string) || 'desc';
 
     // Build Prisma where clause
     const where: any = {};
@@ -114,10 +118,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const total = await prisma.song.count({ where });
     const totalPages = Math.ceil(total / limit);
 
-    // Get paginated songs
+    // Validate and map sortBy field to Prisma field name
+    const fieldMapping: Record<string, string> = {
+      createdAt: 'createdAt',
+      title: 'title',
+      artist: 'artist',
+      energy: 'aiEnergy',
+      accessibility: 'aiAccessibility',
+    };
+
+    const prismaField = fieldMapping[sortBy] || 'createdAt';
+    const prismaOrder = sortOrder === 'asc' ? 'asc' : 'desc';
+
+    // Get paginated songs with dynamic sorting
     const songs = await prisma.song.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { [prismaField]: prismaOrder },
       skip: offset,
       take: limit,
     });
