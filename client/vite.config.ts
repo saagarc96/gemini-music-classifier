@@ -60,6 +60,10 @@
         '/api': {
           target: 'http://localhost:3001',
           changeOrigin: true,
+          rewrite: (path) => {
+            // Convert + to %20 in query string for proper space encoding
+            return path.replace(/\+/g, '%20');
+          },
         },
       },
     },
