@@ -88,7 +88,7 @@ For importing Spotify playlist exports with preview playback support:
 
 ```bash
 # Enrich a Spotify playlist export CSV
-npm run enrich:spotify "docs/test-spotify csv/my-playlist.csv"
+npm run enrich:spotify "test-data/test-spotify-csv/my-playlist.csv"
 ```
 
 **What it does:**
