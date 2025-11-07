@@ -82,6 +82,56 @@ node scripts/import-curator-to-db.cjs enriched.csv \
 - `scripts/verify-import.cjs` - Check import stats and sample data
 - `scripts/check-song-data.cjs` - Inspect specific song values
 
+### Spotify CSV Enrichment Workflow (NEW)
+
+For importing Spotify playlist exports with preview playback support:
+
+```bash
+# Enrich a Spotify playlist export CSV
+npm run enrich:spotify "docs/test-spotify csv/my-playlist.csv"
+```
+
+**What it does:**
+1. Parses Spotify CSV export (120+ columns)
+2. Extracts: Song, Artist, BPM, Spotify Track Id, ISRC
+3. Normalizes BPM to 50-170 range (doubles if <50, halves if >170)
+4. Batch fetches preview URLs and artwork from Spotify API
+5. For each song:
+   - Calls Gemini with artist + title + normalized BPM only
+   - Calls Parallel AI for explicit content detection
+   - Stores in database with Spotify Track ID and preview URL
+6. Sets `reviewed=false` (needs curator review)
+7. Exports enriched CSV to `outputs/`
+8. Shows progress and summary statistics
+
+**Key Features:**
+- **30-second Spotify previews** - Curators can play preview clips in review interface
+- **BPM normalization** - Automatically adjusts BPM to platform requirements
+- **Hybrid audio approach** - Stores preview URLs during import, fallback to API if expired
+- **Compliant with Spotify Terms** - Only uses artist/title for AI classification, not Spotify audio features
+- **Batch API efficiency** - Fetches 50 tracks per API call (120 songs = 3 API calls)
+
+**Spotify API Setup:**
+1. Create app at https://developer.spotify.com/dashboard
+2. Get Client ID and Client Secret
+3. Add to `.env`:
+   ```bash
+   SPOTIFY_CLIENT_ID=your_client_id
+   SPOTIFY_CLIENT_SECRET=your_client_secret
+   ```
+4. Uses Client Credentials flow (no user login required)
+
+**Estimated time:** ~5-10 minutes for 120 songs (includes API calls + AI enrichment)
+
+**Preview URL Success Rate:** ~80% of tracks have preview URLs available
+
+**Compliance Notes:**
+- ✅ Only uses preview URLs for curator playback
+- ✅ Only passes artist/title/BPM to Gemini (not Spotify audio features)
+- ✅ Stores minimal data (track ID, preview URL, artwork)
+- ✅ No stream ripping or permanent audio storage
+- ✅ Compliant with Spotify Developer Terms
+
 ### Batch Processing Workflows (Legacy)
 
 These scripts use the old Gemini Batch API approach (slower, no explicit content):

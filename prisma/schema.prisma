@@ -24,6 +24,9 @@ model Song {
   artwork     String?
   sourceFile  String? @map("source_file")
 
+  // Spotify integration
+  spotifyTrackId String? @map("spotify_track_id") @db.VarChar(50)
+
   // AI classifications (editable by curators)
   aiStatus        String? @map("ai_status") @db.VarChar(50)
   aiErrorMessage  String? @map("ai_error_message")
@@ -52,5 +55,6 @@ model Song {
   @@index([aiSubgenre3], map: "idx_subgenre_3")
   @@index([aiStatus], map: "idx_status")
   @@index([reviewed])
+  @@index([spotifyTrackId], map: "idx_spotify_track_id")
   @@map("songs")
 }
