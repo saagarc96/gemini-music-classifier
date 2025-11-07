@@ -53,13 +53,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const where: any = {};
     const andConditions: any[] = [];
 
-    // Subgenre filter (searches across all 3 subgenre columns)
+    // Subgenre filter (searches across all 3 subgenre columns with case-insensitive matching)
     if (subgenre && subgenre !== 'all') {
       andConditions.push({
         OR: [
-          { aiSubgenre1: subgenre },
-          { aiSubgenre2: subgenre },
-          { aiSubgenre3: subgenre },
+          { aiSubgenre1: { equals: subgenre, mode: 'insensitive' } },
+          { aiSubgenre2: { equals: subgenre, mode: 'insensitive' } },
+          { aiSubgenre3: { equals: subgenre, mode: 'insensitive' } },
         ]
       });
     }
