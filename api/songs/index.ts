@@ -134,6 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       subgenre: song.subgenre,
       artwork: song.artwork,
       source_file: song.sourceFile,
+      spotify_track_id: song.spotifyTrackId,
       ai_status: song.aiStatus,
       ai_error_message: song.aiErrorMessage,
       ai_reasoning: song.aiReasoning,

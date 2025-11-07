@@ -121,6 +121,7 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
           {/* Audio Player */}
           <AudioPlayer
             src={song.source_file}
+            spotifyTrackId={song.spotify_track_id}
             title={song.title}
             artist={song.artist}
           />

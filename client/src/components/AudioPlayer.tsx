@@ -1,14 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
 import { Slider } from './ui/slider';
+import { SpotifyEmbed } from './SpotifyEmbed';
 
 interface AudioPlayerProps {
   src: string | null;
+  spotifyTrackId?: string | null;
   title: string;
   artist: string;
 }
 
-export function AudioPlayer({ src, title, artist }: AudioPlayerProps) {
+export function AudioPlayer({ src, spotifyTrackId, title, artist }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -85,6 +87,11 @@ export function AudioPlayer({ src, title, artist }: AudioPlayerProps) {
     const seconds = Math.floor(time % 60);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
+
+  // If Spotify track ID exists, use Spotify embed instead
+  if (spotifyTrackId) {
+    return <SpotifyEmbed trackId={spotifyTrackId} title={title} artist={artist} />;
+  }
 
   if (!src) {
     return (

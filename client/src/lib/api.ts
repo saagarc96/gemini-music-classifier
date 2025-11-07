@@ -14,6 +14,7 @@ export interface Song {
   subgenre: string | null;
   artwork: string | null;
   source_file: string | null;
+  spotify_track_id: string | null;
   ai_status: string | null;
   ai_error_message: string | null;
   ai_reasoning: string | null;
