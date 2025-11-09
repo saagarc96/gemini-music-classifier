@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, User } from 'lucide-react';
 import { Dialog, DialogContent } from './ui/dialog';
 import { AudioPlayer } from './AudioPlayer';
 import { Label } from './ui/label';
@@ -15,6 +15,8 @@ import {
   SelectValue,
 } from './ui/select';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { useAuth } from '../contexts/AuthContext';
+import { Badge } from './ui/badge';
 
 interface ReviewModalProps {
   song: Song | null;
@@ -25,6 +27,7 @@ interface ReviewModalProps {
 }
 
 export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewModalProps) {
+  const { user } = useAuth();
   const [energy, setEnergy] = useState<string | undefined>(undefined);
   const [accessibility, setAccessibility] = useState<string | undefined>(undefined);
   const [explicit, setExplicit] = useState<string | undefined>(undefined);
@@ -116,6 +119,24 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
                 <p className="text-sm text-zinc-500">BPM: {song.bpm}</p>
               )}
             </div>
+          </div>
+
+          {/* Review Status */}
+          <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg border border-zinc-800">
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-blue-400" />
+              <span className="text-sm text-zinc-300">
+                Reviewing as: <span className="font-medium text-zinc-100">{user?.name}</span>
+              </span>
+              <Badge variant="outline" className="text-xs bg-zinc-800 border-zinc-700 text-zinc-300">
+                {user?.role}
+              </Badge>
+            </div>
+            {song.reviewed && song.reviewed_by && (
+              <div className="text-xs text-zinc-500">
+                Previously reviewed by <span className="text-zinc-400">{song.reviewed_by}</span>
+              </div>
+            )}
           </div>
 
           {/* Audio Player */}

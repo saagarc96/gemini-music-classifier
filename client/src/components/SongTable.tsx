@@ -106,7 +106,7 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
               >
                 Date Added{getSortIndicator('createdAt')}
               </th>
-              <th className="text-center p-4 text-sm text-zinc-400">Reviewed</th>
+              <th className="text-left p-4 text-sm text-zinc-400 min-w-[180px]">Reviewed By</th>
             </tr>
           </thead>
           <tbody>
@@ -165,9 +165,22 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
                     {formatDate(song.created_at)}
                   </div>
                 </td>
-                <td className="p-4 text-center cursor-pointer" onClick={() => onSongClick(song)}>
-                  {song.reviewed ? (
-                    <Check className="w-5 h-5 text-emerald-400 mx-auto" />
+                <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
+                  {song.reviewed && song.reviewed_by ? (
+                    <div className="flex items-start gap-2">
+                      <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm">
+                        <div className="text-zinc-300">{song.reviewed_by}</div>
+                        <div className="text-zinc-500 text-xs">
+                          {formatDate(song.reviewed_at)}
+                        </div>
+                      </div>
+                    </div>
+                  ) : song.reviewed ? (
+                    <div className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-400" />
+                      <span className="text-zinc-400 text-sm">Reviewed</span>
+                    </div>
                   ) : (
                     <span className="text-zinc-600">—</span>
                   )}

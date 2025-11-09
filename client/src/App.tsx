@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Music } from 'lucide-react';
 import { FilterPanel } from './components/FilterPanel';
 import { SongTable } from './components/SongTable';
 import { ReviewModal } from './components/ReviewModal';
@@ -7,8 +6,12 @@ import { ExportModal } from './components/ExportModal';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { getSongs, updateSong, Song, UpdateSongPayload } from './lib/api';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Login from './pages/Login';
+import Header from './components/Header';
 
-export default function App() {
+function AppContent() {
+  const { user, loading: authLoading } = useAuth();
   const [songs, setSongs] = useState<Song[]>([]);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -179,22 +182,29 @@ export default function App() {
     setCurrentPage(1);
   };
 
+  // Show loading spinner while checking auth
+  if (authLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-zinc-950">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <p className="text-zinc-400 mt-4">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!user) {
+    return <Login />;
+  }
+
   return (
     <div className="h-screen flex flex-col bg-zinc-950">
       <Toaster position="top-right" />
 
-      {/* Header */}
-      <header className="flex-shrink-0 border-b border-zinc-800 bg-zinc-900">
-        <div className="px-6 py-3">
-          <div className="flex items-center gap-3">
-            <Music className="w-6 h-6 text-blue-500" />
-            <div>
-              <h1 className="text-lg text-zinc-100">Raina Music Classification Review</h1>
-              <p className="text-xs text-zinc-400">AI Classification Review System</p>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Header with user info and logout */}
+      <Header />
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto px-6 py-4 space-y-4">
@@ -329,5 +339,13 @@ export default function App() {
         selectedIsrcs={selectedIsrcs}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

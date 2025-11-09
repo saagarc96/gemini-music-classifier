@@ -83,7 +83,9 @@ export async function getSongs(params: GetSongsParams = {}): Promise<PaginatedRe
 
   const url = `/api/songs${query.toString() ? `?${query.toString()}` : ''}`;
 
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    credentials: 'include', // Include cookies for authentication
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Failed to fetch songs' }));
@@ -103,6 +105,7 @@ export async function updateSong(isrc: string, payload: UpdateSongPayload): Prom
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
+    credentials: 'include', // Include cookies for authentication
   });
 
   if (!response.ok) {

@@ -18,6 +18,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireAuth } from '../lib/auth.js';
 
 const prisma = new PrismaClient();
 
@@ -30,6 +31,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow PATCH requests
   if (req.method !== 'PATCH') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Require authentication
+  const user = await requireAuth(req, res);
+  if (!user) {
+    return; // requireAuth already sent 401 response
   }
 
   const isrc = req.query.isrc as string;
@@ -85,8 +92,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         aiSubgenre3: payload.ai_subgenre_3 || null,
         curatorNotes: payload.curator_notes || null,
         reviewed: true,
+        reviewedBy: user.name, // Keep legacy string field for backward compatibility
+        reviewedById: user.id, // NEW: Track which user reviewed
         reviewedAt: new Date(),
         modifiedAt: new Date(),
+      },
+      include: {
+        reviewer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
       },
     });
 

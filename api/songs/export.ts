@@ -22,6 +22,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireAuth } from '../lib/auth.js';
 import {
   exportSongsToCSV,
   generateExportFilename,
@@ -35,6 +36,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Require authentication
+  const user = await requireAuth(req, res);
+  if (!user) {
+    return; // requireAuth already sent 401 response
   }
 
   try {
