@@ -1,6 +1,6 @@
 # Upload Workflow Implementation Plan
 
-**Status**: In Progress - 75% Complete (Phases 1-3 Done)
+**Status**: In Progress - 75% Complete (Phases 1-3 Done, CHECKPOINT 3 Paused)
 **Last Updated**: 2025-11-10
 **Branch**: `feature/upload-workflow-with-duplicates`
 
@@ -8,6 +8,7 @@
 - ✅ Phase 1: Database Schema & Utilities (COMPLETE)
 - ✅ Phase 2: CLI Script Enhancement (COMPLETE)
 - ✅ Phase 3: Backend API Endpoints (COMPLETE)
+- ⏸️ CHECKPOINT 3: Backend API Testing (PAUSED - check-duplicates tested ✅, upload endpoint pending)
 - ⏳ Phase 4: Frontend Components (NEXT)
 - ⏳ Phase 5: E2E Testing & Polish (PENDING)
 
@@ -104,22 +105,33 @@ Build hybrid upload workflow supporting both CLI and web-based uploads with inte
    - Upload batch tracking with UUID
 8. ✅ Installed `formidable` and `csv-parser` packages
 
-**🛑 CHECKPOINT 3: Backend API Testing** ⏳ NEXT
-- Test: Use Postman/curl to test endpoints:
-  ```bash
-  # Test duplicate detection
-  curl -X POST http://localhost:3001/api/songs/check-duplicates \
-    -H "Content-Type: application/json" \
-    -d '{"artist": "Daft Punk", "title": "One More Time"}'
+**🛑 CHECKPOINT 3: Backend API Testing** ⏳ IN PROGRESS (PAUSED)
 
-  # Test upload with small CSV (10 songs)
-  curl -X POST http://localhost:3001/api/songs/upload \
-    -F "file=@test-10-songs.csv"
-  ```
-- Verify: Endpoints return correct structure (summary, results tabs)
-- Verify: Enrichment works (Gemini + Parallel AI calls succeed)
-- Verify: Database inserts happen correctly
-- Expected: ~1 min processing time for 10 songs, clear error messages
+**Completed Testing:**
+- ✅ check-duplicates endpoint fully tested:
+  - Exact ISRC match: Returns exactMatch object with matchType='exact'
+  - Fuzzy match: Returns fuzzyMatches array sorted by similarity (92% for "Yussef Dayes" variants)
+  - No match: Returns empty arrays with matchType='none'
+  - All three scenarios working correctly
+
+**Remaining Testing:**
+- ⏸️ upload endpoint testing paused:
+  - Created test-upload-10-songs.csv with 10 French house classics
+  - Started upload test but paused before completion
+  - Need to verify: Enrichment works, database inserts, error handling
+  - Expected: ~2-3 min processing time for 10 songs
+
+**Test Commands:**
+```bash
+# Test duplicate detection (PASSED ✅)
+curl -X POST http://localhost:3001/api/songs/check-duplicates \
+  -H "Content-Type: application/json" \
+  -d '{"artist": "Daft Punk", "title": "One More Time"}'
+
+# Test upload with small CSV (PAUSED ⏸️)
+curl -X POST http://localhost:3001/api/songs/upload \
+  -F "file=@test-upload-10-songs.csv"
+```
 
 ---
 
