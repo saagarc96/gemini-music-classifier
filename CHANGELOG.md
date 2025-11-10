@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Redesigned login page with minimal dark theme
+  - Centered single-card layout with Raina logo
+  - Password visibility toggle with Eye/EyeOff icons
+  - "Remember Me" checkbox functionality
+  - Purple gradient sign-in button with hover animations
+  - Removed colorful gradient panels for cleaner aesthetic
+  - Enhanced form validation with toast notifications
+  - Dark zinc theme (zinc-950/900 palette)
+  - Borderless design for seamless dark appearance
+
 - Sortable "Date Added" column in song table
   - Click column header to toggle sort order (ascending/descending)
   - Visual indicators (↑/↓) show current sort direction
@@ -137,6 +147,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## Commit History
+
+### 2025-01-10
+- `a861d87` - feat: redesign login page with minimal dark theme
 
 ### 2025-01-06
 - `eb54555` - fix: Vite proxy URL encoding for subgenre filters with spaces

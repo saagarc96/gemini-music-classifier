@@ -20,11 +20,14 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const csv = require('csv-parser');
+const readline = require('readline');
 const { createObjectCsvWriter } = require('csv-writer');
 const { PrismaClient } = require('@prisma/client');
 const { initLogger } = require('braintrust');
 const { classifySong } = require('../src/classifiers/gemini-classifier.cjs');
 const { classifyExplicitContent } = require('../src/classifiers/explicit-classifier.cjs');
+const { calculateSongSimilarity, areSongsDuplicate } = require('../src/utils/fuzzy-matcher.cjs');
+const { v4: uuidv4 } = require('uuid');
 
 const prisma = new PrismaClient();
 
@@ -40,6 +43,8 @@ if (!csvPath) {
   console.error('  --skip-existing      Skip songs already in database');
   console.error('  --gemini-only        Only run Gemini classification');
   console.error('  --explicit-only      Only run explicit content check');
+  console.error('  --force-duplicates   Skip duplicate detection (import all songs)');
+  console.error('  --dry-run            Preview duplicates without processing');
   process.exit(1);
 }
 
@@ -48,6 +53,8 @@ const options = {
   skipExisting: args.includes('--skip-existing'),
   geminiOnly: args.includes('--gemini-only'),
   explicitOnly: args.includes('--explicit-only'),
+  forceDuplicates: args.includes('--force-duplicates'),
+  dryRun: args.includes('--dry-run'),
   concurrency: parseInt(args.find(a => a.startsWith('--concurrency='))?.split('=')[1] || '5')
 };
 
@@ -58,6 +65,12 @@ console.log(`Input: ${csvPath}`);
 console.log(`Options:`, options);
 console.log('='.repeat(60));
 console.log('');
+
+// Generate unique batch ID for this upload
+const uploadBatchId = uuidv4();
+
+// Global state for "always new" mode
+let alwaysNewMode = false;
 
 /**
  * Main enrichment function
@@ -85,6 +98,23 @@ async function enrichPlaylist() {
     const songs = await loadCSV(csvPath);
     console.log(`  ✓ Loaded ${songs.length} songs\n`);
 
+    // 1.5. Detect duplicates (unless --force-duplicates is set)
+    let songsToProcess = songs;
+    let duplicateDecisions = {};
+
+    if (!options.forceDuplicates && !options.dryRun) {
+      console.log('[1.5/5] Checking for duplicates...');
+      const duplicateCheck = await detectAndResolveDuplicates(songs, options);
+      songsToProcess = duplicateCheck.songsToProcess;
+      duplicateDecisions = duplicateCheck.decisions;
+      console.log(`  ✓ ${songsToProcess.length} songs to process after duplicate resolution\n`);
+    } else if (options.dryRun) {
+      console.log('[DRY RUN] Checking for duplicates...');
+      await detectAndPreviewDuplicates(songs);
+      console.log('\n[DRY RUN] Complete. No songs were processed.');
+      process.exit(0);
+    }
+
     // Log batch metadata to BrainTrust
     if (braintrustLogger) {
       braintrustLogger.log({
@@ -104,22 +134,22 @@ async function enrichPlaylist() {
     console.log(`[2/5] Processing songs (concurrency: ${options.concurrency})...`);
     const results = [];
 
-    for (let i = 0; i < songs.length; i += options.concurrency) {
-      const batch = songs.slice(i, i + options.concurrency);
+    for (let i = 0; i < songsToProcess.length; i += options.concurrency) {
+      const batch = songsToProcess.slice(i, i + options.concurrency);
       const batchNumber = Math.floor(i / options.concurrency) + 1;
-      const totalBatches = Math.ceil(songs.length / options.concurrency);
+      const totalBatches = Math.ceil(songsToProcess.length / options.concurrency);
 
       console.log(`  Batch ${batchNumber}/${totalBatches} (${batch.length} songs):`);
 
       // Process batch in parallel
       const batchResults = await Promise.all(
-        batch.map(song => enrichSong(song, options))
+        batch.map(song => enrichSong(song, options, duplicateDecisions[song.isrc], uploadBatchId))
       );
 
       results.push(...batchResults);
 
-      const processed = Math.min(i + options.concurrency, songs.length);
-      console.log(`  Progress: ${processed}/${songs.length}\n`);
+      const processed = Math.min(i + options.concurrency, songsToProcess.length);
+      console.log(`  Progress: ${processed}/${songsToProcess.length}\n`);
     }
 
     // 3. Save to database
@@ -185,12 +215,12 @@ async function enrichPlaylist() {
 /**
  * Enriches a single song
  */
-async function enrichSong(song, options) {
+async function enrichSong(song, options, duplicateDecision, uploadBatchId) {
   const logPrefix = `    ${song.artist} - ${song.title}`;
 
   try {
     // Check if already processed
-    if (options.skipExisting && !options.force) {
+    if (options.skipExisting && !options.force && !duplicateDecision) {
       const existing = await prisma.song.findUnique({
         where: { isrc: song.isrc }
       });
@@ -241,17 +271,44 @@ async function enrichSong(song, options) {
       aiExplicit: explicitResult?.classification || null,
       // Status
       aiStatus: (geminiResult?.status === 'SUCCESS' || options.explicitOnly) ? 'SUCCESS' : 'ERROR',
-      aiErrorMessage: geminiResult?.error_message || null
+      aiErrorMessage: geminiResult?.error_message || null,
+      // Upload tracking
+      uploadBatchId: uploadBatchId
     };
 
-    // Save to database
-    await prisma.song.upsert({
-      where: { isrc: song.isrc },
-      update: enrichedSong,
-      create: enrichedSong
-    });
-
-    console.log(`${logPrefix} → ✓ Success`);
+    // Handle duplicate decisions
+    if (duplicateDecision) {
+      if (duplicateDecision.action === 'update') {
+        // Update existing song
+        await prisma.song.update({
+          where: { isrc: duplicateDecision.existingSong.isrc },
+          data: {
+            ...enrichedSong,
+            isrc: duplicateDecision.existingSong.isrc, // Keep original ISRC
+            reviewed: false // Mark for re-review
+          }
+        });
+        console.log(`${logPrefix} → ✓ Updated existing`);
+      } else if (duplicateDecision.action === 'new') {
+        // Save as new duplicate version
+        await prisma.song.create({
+          data: {
+            ...enrichedSong,
+            isDuplicate: true,
+            originalIsrc: duplicateDecision.existingSong.isrc
+          }
+        });
+        console.log(`${logPrefix} → ✓ Saved as new duplicate`);
+      }
+    } else {
+      // Normal upsert for non-duplicates
+      await prisma.song.upsert({
+        where: { isrc: song.isrc },
+        update: enrichedSong,
+        create: enrichedSong
+      });
+      console.log(`${logPrefix} → ✓ Success`);
+    }
 
     return {
       ...song,
@@ -379,6 +436,195 @@ function isRecent(date) {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   return new Date(date) > sevenDaysAgo;
+}
+
+/**
+ * Detects duplicates and prompts for resolution
+ */
+async function detectAndResolveDuplicates(songs, options) {
+  const songsToProcess = [];
+  const decisions = {};
+
+  for (const song of songs) {
+    // Check for duplicates in database
+    const duplicate = await findDuplicate(song);
+
+    if (!duplicate) {
+      // No duplicate found, proceed with enrichment
+      songsToProcess.push(song);
+      continue;
+    }
+
+    // Duplicate found - handle based on "always new" mode
+    if (alwaysNewMode) {
+      songsToProcess.push(song);
+      decisions[song.isrc] = {
+        action: 'new',
+        existingSong: duplicate.song
+      };
+      continue;
+    }
+
+    // Show duplicate prompt
+    console.log('\n' + '='.repeat(60));
+    console.log('🔍 Found potential duplicate');
+    console.log(`   Similarity: ${duplicate.similarity.toFixed(2)}%`);
+    console.log('='.repeat(60));
+    console.log('');
+    console.log('NEW SONG:');
+    console.log(`  Artist: ${song.artist}`);
+    console.log(`  Title: ${song.title}`);
+    console.log(`  ISRC: ${song.isrc || '(none)'}`);
+    console.log(`  BPM: ${song.bpm || '(none)'}`);
+    console.log('');
+    console.log('EXISTING IN DATABASE:');
+    console.log(`  Artist: ${duplicate.song.artist}`);
+    console.log(`  Title: ${duplicate.song.title}`);
+    console.log(`  ISRC: ${duplicate.song.isrc}`);
+    console.log(`  BPM: ${duplicate.song.bpm || '(none)'}`);
+    console.log(`  Reviewed: ${duplicate.song.reviewed ? 'Yes ✅' : 'No'}`);
+    console.log('');
+
+    const choice = await promptUser(
+      'How do you want to handle this?\n' +
+      '  [S]kip - Don\'t import (keep existing)\n' +
+      '  [U]pdate - Merge into existing song\n' +
+      '  [N]ew - Save as new duplicate version\n' +
+      '  [A]lways new - Skip all duplicate checks\n' +
+      '  [Q]uit\n' +
+      '\n' +
+      'Your choice (S/U/N/A/Q): '
+    );
+
+    const normalizedChoice = choice.trim().toUpperCase();
+
+    if (normalizedChoice === 'S' || normalizedChoice === 'SKIP') {
+      console.log('  → Skipped\n');
+      // Don't add to songsToProcess
+    } else if (normalizedChoice === 'U' || normalizedChoice === 'UPDATE') {
+      console.log('  → Will update existing song\n');
+      songsToProcess.push(song);
+      decisions[song.isrc] = {
+        action: 'update',
+        existingSong: duplicate.song
+      };
+    } else if (normalizedChoice === 'N' || normalizedChoice === 'NEW') {
+      console.log('  → Will save as new version\n');
+      songsToProcess.push(song);
+      decisions[song.isrc] = {
+        action: 'new',
+        existingSong: duplicate.song
+      };
+    } else if (normalizedChoice === 'A' || normalizedChoice === 'ALWAYS') {
+      console.log('  → Enabled "Always New" mode for remaining songs\n');
+      alwaysNewMode = true;
+      songsToProcess.push(song);
+      decisions[song.isrc] = {
+        action: 'new',
+        existingSong: duplicate.song
+      };
+    } else if (normalizedChoice === 'Q' || normalizedChoice === 'QUIT') {
+      console.log('  → Quitting...\n');
+      process.exit(0);
+    } else {
+      console.log('  → Invalid choice, skipping song\n');
+    }
+  }
+
+  return { songsToProcess, decisions };
+}
+
+/**
+ * Detects and previews duplicates without processing (dry run)
+ */
+async function detectAndPreviewDuplicates(songs) {
+  let duplicateCount = 0;
+
+  for (const song of songs) {
+    const duplicate = await findDuplicate(song);
+
+    if (duplicate) {
+      duplicateCount++;
+      console.log(`\n[${duplicateCount}] Duplicate found (${duplicate.similarity.toFixed(2)}% match):`);
+      console.log(`  New: ${song.artist} - ${song.title} [${song.isrc || 'no ISRC'}]`);
+      console.log(`  Existing: ${duplicate.song.artist} - ${duplicate.song.title} [${duplicate.song.isrc}]`);
+    }
+  }
+
+  console.log(`\n✓ Found ${duplicateCount} potential duplicates out of ${songs.length} songs`);
+}
+
+/**
+ * Finds a duplicate for a given song
+ */
+async function findDuplicate(song) {
+  // First check for exact ISRC match
+  if (song.isrc) {
+    const exactMatch = await prisma.song.findUnique({
+      where: { isrc: song.isrc }
+    });
+
+    if (exactMatch) {
+      return {
+        song: exactMatch,
+        similarity: 100,
+        matchType: 'isrc'
+      };
+    }
+  }
+
+  // Check for fuzzy artist+title match (70% threshold)
+  const allSongs = await prisma.song.findMany({
+    select: {
+      isrc: true,
+      artist: true,
+      title: true,
+      bpm: true,
+      reviewed: true,
+      aiEnergy: true,
+      aiAccessibility: true
+    }
+  });
+
+  for (const existingSong of allSongs) {
+    const isDuplicate = areSongsDuplicate(
+      { artist: song.artist, title: song.title },
+      { artist: existingSong.artist, title: existingSong.title },
+      70 // 70% threshold
+    );
+
+    if (isDuplicate) {
+      const similarity = calculateSongSimilarity(
+        { artist: song.artist, title: song.title },
+        { artist: existingSong.artist, title: existingSong.title }
+      );
+
+      return {
+        song: existingSong,
+        similarity,
+        matchType: 'fuzzy'
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Prompts user for input
+ */
+function promptUser(question) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
 }
 
 // Run the script
