@@ -371,7 +371,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
 
               <TabsContent value="successful" className="space-y-2 max-h-[400px] overflow-y-auto mt-4">
                 {uploadResult.results.successful.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-20 text-muted-foreground">
                     No songs were successfully enriched
                   </div>
                 ) : (
@@ -393,7 +393,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
 
               <TabsContent value="duplicates" className="space-y-3 max-h-[400px] overflow-y-auto mt-4">
                 {uploadResult.results.duplicates.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-20 text-muted-foreground">
                     No potential duplicates detected
                   </div>
                 ) : (
@@ -426,7 +426,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
 
               <TabsContent value="blocked" className="space-y-2 max-h-[400px] overflow-y-auto mt-4">
                 {uploadResult.results.blocked.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-20 text-muted-foreground">
                     No existing matches found
                   </div>
                 ) : (
@@ -456,7 +456,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
 
               <TabsContent value="errors" className="space-y-2 max-h-[400px] overflow-y-auto mt-4">
                 {uploadResult.results.errors.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-20 text-muted-foreground">
                     No processing errors occurred
                   </div>
                 ) : (
