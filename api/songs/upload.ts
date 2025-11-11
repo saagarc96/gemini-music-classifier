@@ -112,8 +112,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     };
 
-    // Process each song
-    for (const song of songs) {
+    // Process songs in parallel (concurrency: 5)
+    const CONCURRENCY = 5;
+    const processSong = async (song: ParsedSong) => {
       try {
         // Check for duplicates
         const duplicate = await findDuplicate(song);
@@ -121,35 +122,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (duplicate) {
           if (duplicate.matchType === 'exact') {
             // Exact ISRC match - block
-            result.results.blocked.push({
-              song,
-              reason: 'Exact ISRC match',
-              existingIsrc: duplicate.song.isrc
-            });
-            result.summary.blocked++;
+            return {
+              type: 'blocked',
+              data: {
+                song,
+                reason: 'Exact ISRC match',
+                existingIsrc: duplicate.song.isrc
+              }
+            };
           } else {
             // Fuzzy match - flag for review
-            result.results.duplicates.push({
-              newSong: song,
-              existingSong: duplicate.song,
-              similarity: duplicate.similarity
-            });
-            result.summary.duplicates++;
+            return {
+              type: 'duplicate',
+              data: {
+                newSong: song,
+                existingSong: duplicate.song,
+                similarity: duplicate.similarity
+              }
+            };
           }
-          continue;
         }
 
         // No duplicate - enrich and save
         const enrichedSong = await enrichAndSaveSong(song, uploadBatchId);
-        result.results.successful.push(enrichedSong);
-        result.summary.successful++;
+        return {
+          type: 'successful',
+          data: enrichedSong
+        };
 
       } catch (error: any) {
-        result.results.errors.push({
-          song,
-          error: error.message
-        });
-        result.summary.errors++;
+        return {
+          type: 'error',
+          data: {
+            song,
+            error: error.message
+          }
+        };
+      }
+    };
+
+    // Process in batches of CONCURRENCY
+    for (let i = 0; i < songs.length; i += CONCURRENCY) {
+      const batch = songs.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(batch.map(processSong));
+
+      // Categorize results
+      for (const res of results) {
+        if (res.type === 'successful') {
+          result.results.successful.push(res.data);
+          result.summary.successful++;
+        } else if (res.type === 'duplicate') {
+          result.results.duplicates.push(res.data);
+          result.summary.duplicates++;
+        } else if (res.type === 'blocked') {
+          result.results.blocked.push(res.data);
+          result.summary.blocked++;
+        } else if (res.type === 'error') {
+          result.results.errors.push(res.data);
+          result.summary.errors++;
+        }
       }
     }
 
