@@ -1,4 +1,4 @@
-import { FileDown } from 'lucide-react';
+import { FileDown, Upload } from 'lucide-react';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -27,6 +27,7 @@ interface FilterPanelProps {
   onExplicitChange: (value: string) => void;
   onSearchChange: (value: string) => void;
   onExport: () => void;
+  onUpload: () => void;
   totalCount: number;
 }
 
@@ -46,6 +47,7 @@ export function FilterPanel({
   onExplicitChange,
   onSearchChange,
   onExport,
+  onUpload,
   totalCount,
 }: FilterPanelProps) {
   return (
@@ -56,6 +58,15 @@ export function FilterPanel({
           <span className="text-sm text-zinc-400">
             Showing {totalCount} {totalCount === 1 ? 'song' : 'songs'}
           </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onUpload}
+            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Upload CSV
+          </Button>
           <Button
             variant="outline"
             size="sm"

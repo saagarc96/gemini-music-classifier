@@ -3,6 +3,7 @@ import { FilterPanel } from './components/FilterPanel';
 import { SongTable } from './components/SongTable';
 import { ReviewModal } from './components/ReviewModal';
 import { ExportModal } from './components/ExportModal';
+import { UploadModal } from './components/UploadModal';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { getSongs, updateSong, Song, UpdateSongPayload } from './lib/api';
@@ -16,6 +17,7 @@ function AppContent() {
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Filter states
@@ -245,6 +247,7 @@ function AppContent() {
             setCurrentPage(1);
           }}
           onExport={() => setIsExportModalOpen(true)}
+          onUpload={() => setIsUploadModalOpen(true)}
           totalCount={totalSongs}
         />
 
@@ -337,6 +340,16 @@ function AppContent() {
         }}
         totalSongs={totalSongs}
         selectedIsrcs={selectedIsrcs}
+      />
+
+      {/* Upload Modal */}
+      <UploadModal
+        open={isUploadModalOpen}
+        onOpenChange={setIsUploadModalOpen}
+        onUploadComplete={() => {
+          fetchSongs(); // Refresh song list after upload
+          toast.success('Songs refreshed');
+        }}
       />
     </div>
   );
