@@ -310,99 +310,165 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
           </div>
         ) : (
           /* Results View */
-          <div className="space-y-4">
-            <div className="grid grid-cols-4 gap-4">
-              <div className="p-4 bg-green-500/10 rounded-lg">
-                <div className="text-2xl font-bold text-green-500">
-                  {uploadResult.summary.successful}
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-3">Upload Summary</h3>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <div className="text-3xl font-bold text-green-500 mb-1">
+                    {uploadResult.summary.successful}
+                  </div>
+                  <div className="text-sm font-medium text-green-400">Enriched & Saved</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    New songs added to database
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">Successful</div>
-              </div>
-              <div className="p-4 bg-yellow-500/10 rounded-lg">
-                <div className="text-2xl font-bold text-yellow-500">
-                  {uploadResult.summary.duplicates}
+                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                  <div className="text-3xl font-bold text-yellow-500 mb-1">
+                    {uploadResult.summary.duplicates}
+                  </div>
+                  <div className="text-sm font-medium text-yellow-400">Potential Duplicates</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Similar songs found (70%+ match)
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">Duplicates</div>
-              </div>
-              <div className="p-4 bg-red-500/10 rounded-lg">
-                <div className="text-2xl font-bold text-red-500">
-                  {uploadResult.summary.blocked}
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <div className="text-3xl font-bold text-red-500 mb-1">
+                    {uploadResult.summary.blocked}
+                  </div>
+                  <div className="text-sm font-medium text-red-400">Already in Database</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Exact ISRC matches (skipped)
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">Blocked</div>
-              </div>
-              <div className="p-4 bg-gray-500/10 rounded-lg">
-                <div className="text-2xl font-bold text-gray-500">
-                  {uploadResult.summary.errors}
+                <div className="p-4 bg-gray-500/10 border border-gray-500/20 rounded-lg">
+                  <div className="text-3xl font-bold text-gray-400 mb-1">
+                    {uploadResult.summary.errors}
+                  </div>
+                  <div className="text-sm font-medium text-gray-300">Processing Errors</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Failed to enrich
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">Errors</div>
               </div>
             </div>
 
-            <Tabs defaultValue="successful" className="w-full">
+            <Tabs defaultValue={uploadResult.summary.successful > 0 ? "successful" : uploadResult.summary.duplicates > 0 ? "duplicates" : "blocked"} className="w-full">
               <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="successful">
-                  Success ({uploadResult.summary.successful})
+                <TabsTrigger value="successful" className="data-[state=active]:bg-green-500/20">
+                  ✅ Enriched ({uploadResult.summary.successful})
                 </TabsTrigger>
-                <TabsTrigger value="duplicates">
-                  Duplicates ({uploadResult.summary.duplicates})
+                <TabsTrigger value="duplicates" className="data-[state=active]:bg-yellow-500/20">
+                  ⚠️ Duplicates ({uploadResult.summary.duplicates})
                 </TabsTrigger>
-                <TabsTrigger value="blocked">
-                  Blocked ({uploadResult.summary.blocked})
+                <TabsTrigger value="blocked" className="data-[state=active]:bg-red-500/20">
+                  🚫 Already Exists ({uploadResult.summary.blocked})
                 </TabsTrigger>
-                <TabsTrigger value="errors">
-                  Errors ({uploadResult.summary.errors})
+                <TabsTrigger value="errors" className="data-[state=active]:bg-gray-500/20">
+                  ❌ Errors ({uploadResult.summary.errors})
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="successful" className="space-y-2 max-h-[400px] overflow-y-auto">
-                {uploadResult.results.successful.map((song, i) => (
-                  <div key={i} className="p-3 bg-muted rounded-lg">
-                    <div className="font-medium">
-                      {song.artist} - {song.title}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {song.aiEnergy} • {song.aiAccessibility} • {song.aiSubgenre1}
-                    </div>
+              <TabsContent value="successful" className="space-y-2 max-h-[400px] overflow-y-auto mt-4">
+                {uploadResult.results.successful.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No songs were successfully enriched
                   </div>
-                ))}
+                ) : (
+                  uploadResult.results.successful.map((song, i) => (
+                    <div key={i} className="p-4 bg-green-500/5 border border-green-500/20 rounded-lg">
+                      <div className="font-medium text-lg">
+                        {song.artist} - {song.title}
+                      </div>
+                      <div className="text-sm text-muted-foreground mt-2 flex flex-wrap gap-2">
+                        <span className="px-2 py-1 bg-muted rounded">{song.aiEnergy}</span>
+                        <span className="px-2 py-1 bg-muted rounded">{song.aiAccessibility}</span>
+                        <span className="px-2 py-1 bg-muted rounded">{song.aiSubgenre1}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-2">ISRC: {song.isrc}</div>
+                    </div>
+                  ))
+                )}
               </TabsContent>
 
-              <TabsContent value="duplicates" className="space-y-2 max-h-[400px] overflow-y-auto">
-                {uploadResult.results.duplicates.map((dup, i) => (
-                  <div key={i} className="p-3 bg-yellow-500/10 rounded-lg">
-                    <div className="font-medium">
-                      {dup.newSong.artist} - {dup.newSong.title}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {dup.similarity.toFixed(1)}% similar to: {dup.existingSong.artist} -{' '}
-                      {dup.existingSong.title}
-                    </div>
+              <TabsContent value="duplicates" className="space-y-3 max-h-[400px] overflow-y-auto mt-4">
+                {uploadResult.results.duplicates.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No potential duplicates detected
                   </div>
-                ))}
+                ) : (
+                  uploadResult.results.duplicates.map((dup, i) => (
+                    <div key={i} className="p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="font-medium">New Song:</div>
+                        <div className="text-sm font-bold text-yellow-500">
+                          {dup.similarity.toFixed(1)}% Match
+                        </div>
+                      </div>
+                      <div className="text-sm mb-3">
+                        {dup.newSong.artist} - {dup.newSong.title}
+                      </div>
+                      <div className="font-medium text-muted-foreground text-sm mb-1">
+                        Similar to existing song:
+                      </div>
+                      <div className="text-sm">
+                        {dup.existingSong.artist} - {dup.existingSong.title}
+                      </div>
+                      {dup.existingSong.isrc && (
+                        <div className="text-xs text-muted-foreground mt-2">
+                          Existing ISRC: {dup.existingSong.isrc}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </TabsContent>
 
-              <TabsContent value="blocked" className="space-y-2 max-h-[400px] overflow-y-auto">
-                {uploadResult.results.blocked.map((blocked, i) => (
-                  <div key={i} className="p-3 bg-red-500/10 rounded-lg">
-                    <div className="font-medium">
-                      {blocked.song.artist} - {blocked.song.title}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {blocked.reason}: {blocked.existingIsrc}
-                    </div>
+              <TabsContent value="blocked" className="space-y-2 max-h-[400px] overflow-y-auto mt-4">
+                {uploadResult.results.blocked.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No songs were blocked
                   </div>
-                ))}
+                ) : (
+                  <>
+                    <div className="p-3 bg-muted/50 rounded-lg mb-3">
+                      <p className="text-sm text-muted-foreground">
+                        These songs are already in your database with the exact same ISRC code.
+                        They were automatically skipped to prevent duplicates.
+                      </p>
+                    </div>
+                    {uploadResult.results.blocked.map((blocked, i) => (
+                      <div key={i} className="p-4 bg-red-500/5 border border-red-500/20 rounded-lg">
+                        <div className="font-medium">
+                          {blocked.song.artist} - {blocked.song.title}
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-2">
+                          ISRC: <span className="font-mono">{blocked.existingIsrc}</span>
+                        </div>
+                        <div className="text-xs text-red-400 mt-1">
+                          ✓ Already in database - skipped import
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </TabsContent>
 
-              <TabsContent value="errors" className="space-y-2 max-h-[400px] overflow-y-auto">
-                {uploadResult.results.errors.map((error, i) => (
-                  <div key={i} className="p-3 bg-red-500/10 rounded-lg">
-                    <div className="font-medium">
-                      {error.song.artist} - {error.song.title}
-                    </div>
-                    <div className="text-sm text-destructive">{error.error}</div>
+              <TabsContent value="errors" className="space-y-2 max-h-[400px] overflow-y-auto mt-4">
+                {uploadResult.results.errors.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No processing errors occurred
                   </div>
-                ))}
+                ) : (
+                  uploadResult.results.errors.map((error, i) => (
+                    <div key={i} className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                      <div className="font-medium">
+                        {error.song.artist} - {error.song.title}
+                      </div>
+                      <div className="text-sm text-destructive mt-2 font-mono">{error.error}</div>
+                    </div>
+                  ))
+                )}
               </TabsContent>
             </Tabs>
 
