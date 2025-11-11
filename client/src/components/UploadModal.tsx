@@ -332,13 +332,13 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
                     Similar songs found (70%+ match)
                   </div>
                 </div>
-                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <div className="text-3xl font-bold text-red-500 mb-1">
+                <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <div className="text-3xl font-bold text-blue-500 mb-1">
                     {uploadResult.summary.blocked}
                   </div>
-                  <div className="text-sm font-medium text-red-400">Already in Database</div>
+                  <div className="text-sm font-medium text-blue-400">Existing Matches Found</div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    Exact ISRC matches (skipped)
+                    Already in database (skipped)
                   </div>
                 </div>
                 <div className="p-4 bg-gray-500/10 border border-gray-500/20 rounded-lg">
@@ -361,8 +361,8 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
                 <TabsTrigger value="duplicates" className="data-[state=active]:bg-yellow-500/20">
                   ⚠️ Duplicates ({uploadResult.summary.duplicates})
                 </TabsTrigger>
-                <TabsTrigger value="blocked" className="data-[state=active]:bg-red-500/20">
-                  🚫 Already Exists ({uploadResult.summary.blocked})
+                <TabsTrigger value="blocked" className="data-[state=active]:bg-blue-500/20">
+                  ℹ️ Existing Matches ({uploadResult.summary.blocked})
                 </TabsTrigger>
                 <TabsTrigger value="errors" className="data-[state=active]:bg-gray-500/20">
                   ❌ Errors ({uploadResult.summary.errors})
@@ -427,26 +427,26 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
               <TabsContent value="blocked" className="space-y-2 max-h-[400px] overflow-y-auto mt-4">
                 {uploadResult.results.blocked.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    No songs were blocked
+                    No existing matches found
                   </div>
                 ) : (
                   <>
-                    <div className="p-3 bg-muted/50 rounded-lg mb-3">
-                      <p className="text-sm text-muted-foreground">
-                        These songs are already in your database with the exact same ISRC code.
-                        They were automatically skipped to prevent duplicates.
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg mb-3">
+                      <p className="text-sm text-blue-200">
+                        ℹ️ These songs are already in your database with the exact same ISRC code.
+                        They were automatically skipped to avoid duplicates.
                       </p>
                     </div>
                     {uploadResult.results.blocked.map((blocked, i) => (
-                      <div key={i} className="p-4 bg-red-500/5 border border-red-500/20 rounded-lg">
+                      <div key={i} className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg">
                         <div className="font-medium">
                           {blocked.song.artist} - {blocked.song.title}
                         </div>
                         <div className="text-sm text-muted-foreground mt-2">
                           ISRC: <span className="font-mono">{blocked.existingIsrc}</span>
                         </div>
-                        <div className="text-xs text-red-400 mt-1">
-                          ✓ Already in database - skipped import
+                        <div className="text-xs text-blue-400 mt-1">
+                          ✓ Already in database - skipped
                         </div>
                       </div>
                     ))}
