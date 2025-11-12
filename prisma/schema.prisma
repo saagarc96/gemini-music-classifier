@@ -47,8 +47,14 @@ model Song {
   artwork     String?
   sourceFile  String? @map("source_file")
 
+  // Media URLs
+  s3Url               String? @map("s3_url")
+  artworkUrl          String? @map("artwork_url")
+
   // Spotify integration
-  spotifyTrackId String? @map("spotify_track_id") @db.VarChar(50)
+  spotifyTrackId      String? @map("spotify_track_id") @db.VarChar(50)
+  spotifyPreviewUrl   String? @map("spotify_preview_url")
+  spotifyArtworkUrl   String? @map("spotify_artwork_url")
 
   // AI classifications (editable by curators)
   aiStatus        String? @map("ai_status") @db.VarChar(50)

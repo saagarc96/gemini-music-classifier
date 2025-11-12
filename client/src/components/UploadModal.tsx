@@ -42,14 +42,13 @@ interface UploadResult {
 interface UploadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUploadComplete?: () => void;
+  onUploadComplete?: (result: UploadResult) => void;
 }
 
 export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const [csvPreview, setCsvPreview] = useState<string[][]>([]);
   const [validationError, setValidationError] = useState<string>('');
 
@@ -83,8 +82,9 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
 
     // Parse header
     const header = lines[0].toLowerCase();
-    if (!header.includes('artist') || !header.includes('title')) {
-      setValidationError('CSV must contain Artist and Title columns');
+    const hasTitle = header.includes('title') || header.includes('song');
+    if (!header.includes('artist') || !hasTitle) {
+      setValidationError('CSV must contain Artist and Title (or Song) columns');
       return false;
     }
 
@@ -138,7 +138,6 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
     if (!selectedFile) return;
 
     setUploading(true);
-    setUploadResult(null);
 
     try {
       const formData = new FormData();
@@ -154,14 +153,16 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
       }
 
       const result: UploadResult = await response.json();
-      setUploadResult(result);
 
       toast.success(
         `Upload complete: ${result.summary.successful} songs enriched, ${result.summary.duplicates} duplicates detected`
       );
 
+      // Close modal and navigate to results page
+      handleClose();
+
       if (onUploadComplete) {
-        onUploadComplete();
+        onUploadComplete(result);
       }
     } catch (error: any) {
       toast.error(`Upload failed: ${error.message}`);
@@ -175,22 +176,20 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
     setSelectedFile(null);
     setCsvPreview([]);
     setValidationError('');
-    setUploadResult(null);
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-7xl w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Upload CSV</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-xl">Upload CSV</DialogTitle>
+          <DialogDescription className="text-base">
             Upload a CSV file with songs to enrich and add to the database (maximum 250 songs)
           </DialogDescription>
         </DialogHeader>
 
-        {!uploadResult ? (
-          <div className="space-y-6">
+        <div className="space-y-6 mt-4">
             {/* File Upload Area */}
             <div
               className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
@@ -259,24 +258,24 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
 
                 {/* CSV Preview */}
                 {csvPreview.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Preview (first 5 rows):</p>
-                    <div className="overflow-x-auto rounded-lg border">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted">
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold text-zinc-200">Preview (first 5 rows):</p>
+                    <div className="overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-900">
+                      <table className="w-full text-xs">
+                        <thead className="bg-zinc-800">
                           <tr>
                             {csvPreview[0].map((header, i) => (
-                              <th key={i} className="px-4 py-2 text-left font-medium">
+                              <th key={i} className="px-3 py-2 text-left font-semibold text-zinc-200 whitespace-nowrap">
                                 {header}
                               </th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="text-zinc-300">
                           {csvPreview.slice(1, 6).map((row, i) => (
-                            <tr key={i} className="border-t">
+                            <tr key={i} className="border-t border-zinc-800 hover:bg-zinc-800/50">
                               {row.map((cell, j) => (
-                                <td key={j} className="px-4 py-2">
+                                <td key={j} className="px-3 py-2 whitespace-nowrap">
                                   {cell}
                                 </td>
                               ))}
@@ -307,177 +306,9 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
                 </Button>
               </div>
             )}
-          </div>
-        ) : (
-          /* Results View */
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-3">Upload Summary</h3>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
-                  <div className="text-3xl font-bold text-green-500 mb-1">
-                    {uploadResult.summary.successful}
-                  </div>
-                  <div className="text-sm font-medium text-green-400">Enriched & Saved</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    New songs added to database
-                  </div>
-                </div>
-                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                  <div className="text-3xl font-bold text-yellow-500 mb-1">
-                    {uploadResult.summary.duplicates}
-                  </div>
-                  <div className="text-sm font-medium text-yellow-400">Potential Duplicates</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Similar songs found (70%+ match)
-                  </div>
-                </div>
-                <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                  <div className="text-3xl font-bold text-blue-500 mb-1">
-                    {uploadResult.summary.blocked}
-                  </div>
-                  <div className="text-sm font-medium text-blue-400">Existing Matches Found</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Already in database (skipped)
-                  </div>
-                </div>
-                <div className="p-4 bg-gray-500/10 border border-gray-500/20 rounded-lg">
-                  <div className="text-3xl font-bold text-gray-400 mb-1">
-                    {uploadResult.summary.errors}
-                  </div>
-                  <div className="text-sm font-medium text-gray-300">Processing Errors</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Failed to enrich
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <Tabs defaultValue={uploadResult.summary.successful > 0 ? "successful" : uploadResult.summary.duplicates > 0 ? "duplicates" : "blocked"} className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="successful" className="data-[state=active]:bg-green-500/20">
-                  ✅ Enriched ({uploadResult.summary.successful})
-                </TabsTrigger>
-                <TabsTrigger value="duplicates" className="data-[state=active]:bg-yellow-500/20">
-                  ⚠️ Duplicates ({uploadResult.summary.duplicates})
-                </TabsTrigger>
-                <TabsTrigger value="blocked" className="data-[state=active]:bg-blue-500/20">
-                  ℹ️ Existing Matches ({uploadResult.summary.blocked})
-                </TabsTrigger>
-                <TabsTrigger value="errors" className="data-[state=active]:bg-gray-500/20">
-                  ❌ Errors ({uploadResult.summary.errors})
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="successful" className="space-y-2 max-h-[400px] overflow-y-auto mt-4">
-                {uploadResult.results.successful.length === 0 ? (
-                  <div className="text-center py-20 text-muted-foreground">
-                    No songs were successfully enriched
-                  </div>
-                ) : (
-                  uploadResult.results.successful.map((song, i) => (
-                    <div key={i} className="p-4 bg-green-500/5 border border-green-500/20 rounded-lg">
-                      <div className="font-medium text-lg">
-                        {song.artist} - {song.title}
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-2 flex flex-wrap gap-2">
-                        <span className="px-2 py-1 bg-muted rounded">{song.aiEnergy}</span>
-                        <span className="px-2 py-1 bg-muted rounded">{song.aiAccessibility}</span>
-                        <span className="px-2 py-1 bg-muted rounded">{song.aiSubgenre1}</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-2">ISRC: {song.isrc}</div>
-                    </div>
-                  ))
-                )}
-              </TabsContent>
-
-              <TabsContent value="duplicates" className="space-y-3 max-h-[400px] overflow-y-auto mt-4">
-                {uploadResult.results.duplicates.length === 0 ? (
-                  <div className="text-center py-20 text-muted-foreground">
-                    No potential duplicates detected
-                  </div>
-                ) : (
-                  uploadResult.results.duplicates.map((dup, i) => (
-                    <div key={i} className="p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="font-medium">New Song:</div>
-                        <div className="text-sm font-bold text-yellow-500">
-                          {dup.similarity.toFixed(1)}% Match
-                        </div>
-                      </div>
-                      <div className="text-sm mb-3">
-                        {dup.newSong.artist} - {dup.newSong.title}
-                      </div>
-                      <div className="font-medium text-muted-foreground text-sm mb-1">
-                        Similar to existing song:
-                      </div>
-                      <div className="text-sm">
-                        {dup.existingSong.artist} - {dup.existingSong.title}
-                      </div>
-                      {dup.existingSong.isrc && (
-                        <div className="text-xs text-muted-foreground mt-2">
-                          Existing ISRC: {dup.existingSong.isrc}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </TabsContent>
-
-              <TabsContent value="blocked" className="space-y-2 max-h-[400px] overflow-y-auto mt-4">
-                {uploadResult.results.blocked.length === 0 ? (
-                  <div className="text-center py-20 text-muted-foreground">
-                    No existing matches found
-                  </div>
-                ) : (
-                  <>
-                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg mb-3">
-                      <p className="text-sm text-blue-200">
-                        ℹ️ These songs are already in your database with the exact same ISRC code.
-                        They were automatically skipped to avoid duplicates.
-                      </p>
-                    </div>
-                    {uploadResult.results.blocked.map((blocked, i) => (
-                      <div key={i} className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg">
-                        <div className="font-medium">
-                          {blocked.song.artist} - {blocked.song.title}
-                        </div>
-                        <div className="text-sm text-muted-foreground mt-2">
-                          ISRC: <span className="font-mono">{blocked.existingIsrc}</span>
-                        </div>
-                        <div className="text-xs text-blue-400 mt-1">
-                          ✓ Already in database - skipped
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-              </TabsContent>
-
-              <TabsContent value="errors" className="space-y-2 max-h-[400px] overflow-y-auto mt-4">
-                {uploadResult.results.errors.length === 0 ? (
-                  <div className="text-center py-20 text-muted-foreground">
-                    No processing errors occurred
-                  </div>
-                ) : (
-                  uploadResult.results.errors.map((error, i) => (
-                    <div key={i} className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-                      <div className="font-medium">
-                        {error.song.artist} - {error.song.title}
-                      </div>
-                      <div className="text-sm text-destructive mt-2 font-mono">{error.error}</div>
-                    </div>
-                  ))
-                )}
-              </TabsContent>
-            </Tabs>
-
-            <Button onClick={handleClose} className="w-full">
-              Close
-            </Button>
-          </div>
-        )}
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
+

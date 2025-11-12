@@ -10,6 +10,93 @@ import { classifyExplicitContent } from '../../src/classifiers/explicit-classifi
 
 const prisma = new PrismaClient();
 
+// Spotify API token cache
+let spotifyToken: { token: string; expires: number } | null = null;
+
+/**
+ * Get Spotify API access token using Client Credentials flow
+ */
+async function getSpotifyToken(): Promise<string> {
+  // Return cached token if still valid
+  if (spotifyToken && spotifyToken.expires > Date.now()) {
+    return spotifyToken.token;
+  }
+
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Spotify API credentials not configured');
+  }
+
+  const response = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': 'Basic ' + Buffer.from(clientId + ':' + clientSecret).toString('base64')
+    },
+    body: 'grant_type=client_credentials'
+  });
+
+  if (!response.ok) {
+    throw new Error(`Spotify auth failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+
+  // Cache token (expires in 1 hour, refresh 5 min early)
+  spotifyToken = {
+    token: data.access_token,
+    expires: Date.now() + (data.expires_in - 300) * 1000
+  };
+
+  return data.access_token;
+}
+
+/**
+ * Fetch Spotify track data in batches (preview URL and artwork)
+ */
+async function fetchSpotifyTrackData(trackIds: string[]): Promise<Map<string, { previewUrl: string | null; artworkUrl: string | null }>> {
+  const result = new Map();
+
+  if (trackIds.length === 0) return result;
+
+  try {
+    const token = await getSpotifyToken();
+
+    // Batch fetch up to 50 tracks at a time
+    const batchSize = 50;
+    for (let i = 0; i < trackIds.length; i += batchSize) {
+      const batch = trackIds.slice(i, i + batchSize);
+      const idsParam = batch.join(',');
+
+      const response = await fetch(`https://api.spotify.com/v1/tracks?ids=${idsParam}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        console.error(`Spotify API error: ${response.statusText}`);
+        continue;
+      }
+
+      const data = await response.json();
+
+      for (const track of data.tracks) {
+        if (track) {
+          result.set(track.id, {
+            previewUrl: track.preview_url || null,
+            artworkUrl: track.album?.images?.[0]?.url || null
+          });
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error('Error fetching Spotify data:', error.message);
+  }
+
+  return result;
+}
+
 // Disable body parser for file uploads
 export const config = {
   api: {
@@ -23,6 +110,10 @@ interface ParsedSong {
   isrc?: string;
   bpm?: number;
   spotifyTrackId?: string;
+  s3Url?: string;
+  artworkUrl?: string;
+  spotifyPreviewUrl?: string;
+  spotifyArtworkUrl?: string;
 }
 
 interface DuplicateMatch {
@@ -93,6 +184,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error: `Too many songs. Maximum 250 songs per upload. You provided ${songs.length} songs.`
       });
     }
+
+    // Fetch Spotify track data for songs with Spotify Track IDs
+    const spotifyTrackIds = songs
+      .map(s => s.spotifyTrackId)
+      .filter((id): id is string => !!id);
+
+    const spotifyData = await fetchSpotifyTrackData(spotifyTrackIds);
+
+    // Merge Spotify data into songs
+    songs.forEach(song => {
+      if (song.spotifyTrackId && spotifyData.has(song.spotifyTrackId)) {
+        const data = spotifyData.get(song.spotifyTrackId)!;
+        // Only set if not already present in CSV
+        if (!song.spotifyPreviewUrl) {
+          song.spotifyPreviewUrl = data.previewUrl || undefined;
+        }
+        if (!song.spotifyArtworkUrl) {
+          song.spotifyArtworkUrl = data.artworkUrl || undefined;
+        }
+      }
+    });
 
     // Initialize result structure
     const result: UploadResult = {
@@ -240,11 +352,20 @@ async function parseCSV(filePath: string): Promise<ParsedSong[]> {
       .on('data', (row) => {
         // Support multiple column name variations
         const artist = row.Artist || row.artist || row.ARTIST;
-        const title = row.Title || row.title || row.TITLE || row.Name || row.name;
+        const title = row.Title || row.title || row.TITLE || row.Name || row.name || row.Song || row.song || row.SONG;
         const isrc = row.ISRC || row.isrc;
         const bpmValue = row.BPM || row.bpm;
-        const bpm = bpmValue ? parseInt(bpmValue, 10) : undefined;
-        const spotifyTrackId = row['Spotify Track ID'] || row.spotify_track_id;
+        let bpm = bpmValue ? parseInt(bpmValue, 10) : undefined;
+        // Normalize BPM to 50-170 range (Raina platform requirement)
+        if (bpm) {
+          if (bpm < 50) bpm = bpm * 2;
+          if (bpm > 170) bpm = Math.floor(bpm / 2);
+        }
+        const spotifyTrackId = row['Spotify Track Id'] || row['Spotify Track ID'] || row.spotify_track_id || row.spotifyTrackId;
+        const s3Url = row.s3_url || row.S3_URL || row['S3 URL'] || row.source_file || row.SOURCE_FILE || row['Source File'];
+        const artworkUrl = row.artwork_url || row.ARTWORK_URL || row['Artwork URL'] || row.artwork || row.ARTWORK || row.Artwork;
+        const spotifyPreviewUrl = row.spotify_preview_url || row['Spotify Preview URL'] || row.spotifyPreviewUrl;
+        const spotifyArtworkUrl = row.spotify_artwork_url || row['Spotify Artwork URL'] || row.spotifyArtworkUrl;
 
         if (artist && title) {
           songs.push({
@@ -252,7 +373,11 @@ async function parseCSV(filePath: string): Promise<ParsedSong[]> {
             title,
             isrc,
             bpm,
-            spotifyTrackId
+            spotifyTrackId,
+            s3Url,
+            artworkUrl,
+            spotifyPreviewUrl,
+            spotifyArtworkUrl
           });
         }
       })
@@ -340,6 +465,10 @@ async function enrichAndSaveSong(song: ParsedSong, uploadBatchId: string) {
     artist: song.artist,
     bpm: song.bpm || null,
     spotifyTrackId: song.spotifyTrackId || null,
+    s3Url: song.s3Url || null,
+    artworkUrl: song.artworkUrl || null,
+    spotifyPreviewUrl: song.spotifyPreviewUrl || null,
+    spotifyArtworkUrl: song.spotifyArtworkUrl || null,
     // Gemini results
     aiEnergy: geminiResult?.energy || null,
     aiAccessibility: geminiResult?.accessibility || null,
