@@ -69,6 +69,9 @@ console.log('');
 // Generate unique batch ID for this upload
 const uploadBatchId = uuidv4();
 
+// Extract batch name from CSV filename (remove .csv extension)
+const batchName = path.basename(csvPath, '.csv');
+
 // Global state for "always new" mode
 let alwaysNewMode = false;
 
@@ -273,7 +276,8 @@ async function enrichSong(song, options, duplicateDecision, uploadBatchId) {
       aiStatus: (geminiResult?.status === 'SUCCESS' || options.explicitOnly) ? 'SUCCESS' : 'ERROR',
       aiErrorMessage: geminiResult?.error_message || null,
       // Upload tracking
-      uploadBatchId: uploadBatchId
+      uploadBatchId: uploadBatchId,
+      uploadBatchName: batchName
     };
 
     // Handle duplicate decisions

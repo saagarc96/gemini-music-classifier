@@ -81,9 +81,10 @@ model Song {
   creator      User?     @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   // Duplicate tracking
-  isDuplicate   Boolean  @default(false) @map("is_duplicate")
-  originalIsrc  String?  @map("original_isrc") @db.VarChar(12)
-  uploadBatchId String?  @map("upload_batch_id") @db.VarChar(50)
+  isDuplicate     Boolean  @default(false) @map("is_duplicate")
+  originalIsrc    String?  @map("original_isrc") @db.VarChar(12)
+  uploadBatchId   String?  @map("upload_batch_id") @db.VarChar(50)
+  uploadBatchName String?  @map("upload_batch_name") @db.VarChar(255)
 
   // Timestamps
   createdAt  DateTime @default(now()) @map("created_at")
@@ -101,5 +102,6 @@ model Song {
   @@index([isDuplicate], map: "idx_is_duplicate")
   @@index([originalIsrc], map: "idx_original_isrc")
   @@index([uploadBatchId], map: "idx_upload_batch_id")
+  @@index([uploadBatchName], map: "idx_upload_batch_name")
   @@map("songs")
 }

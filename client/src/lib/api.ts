@@ -45,6 +45,15 @@ export interface PaginatedResponse {
   pagination: PaginationInfo;
 }
 
+export interface UploadBatch {
+  uploadBatchId: string;
+  uploadBatchName: string;
+  uploadDate: string;
+  totalSongs: number;
+  reviewedSongs: number;
+  unreviewedSongs: number;
+}
+
 export interface GetSongsParams {
   page?: number;
   limit?: number;
@@ -54,6 +63,7 @@ export interface GetSongsParams {
   energy?: string;
   accessibility?: string;
   explicit?: string;
+  uploadBatchId?: string;
   search?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
@@ -115,4 +125,21 @@ export async function updateSong(isrc: string, payload: UpdateSongPayload): Prom
 
   const result = await response.json();
   return result.data;
+}
+
+/**
+ * Fetches all upload batches with metadata
+ */
+export async function getUploadBatches(): Promise<UploadBatch[]> {
+  const response = await fetch('/api/songs/batches', {
+    credentials: 'include', // Include cookies for authentication
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to fetch upload batches' }));
+    throw new Error(error.error || 'Failed to fetch upload batches');
+  }
+
+  const data = await response.json();
+  return data.batches;
 }

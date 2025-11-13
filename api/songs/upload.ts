@@ -170,7 +170,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // Parse multipart form data
-    const { file, songs } = await parseFormData(req);
+    const { file, songs, batchName } = await parseFormData(req);
 
     if (!file || !songs || songs.length === 0) {
       return res.status(400).json({
@@ -224,8 +224,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     };
 
-    // Process songs in parallel (concurrency: 5)
-    const CONCURRENCY = 5;
+    // Process songs in parallel (concurrency: 10)
+    const CONCURRENCY = 10;
     const processSong = async (song: ParsedSong) => {
       try {
         // Check for duplicates
@@ -256,7 +256,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // No duplicate - enrich and save
-        const enrichedSong = await enrichAndSaveSong(song, uploadBatchId);
+        const enrichedSong = await enrichAndSaveSong(song, uploadBatchId, batchName);
         return {
           type: 'successful',
           data: enrichedSong
@@ -315,6 +315,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 async function parseFormData(req: VercelRequest): Promise<{
   file: formidable.File | null;
   songs: ParsedSong[];
+  batchName: string;
 }> {
   return new Promise((resolve, reject) => {
     const form = formidable({ multiples: false });
@@ -327,12 +328,17 @@ async function parseFormData(req: VercelRequest): Promise<{
       const file = Array.isArray(files.file) ? files.file[0] : files.file;
 
       if (!file) {
-        return resolve({ file: null, songs: [] });
+        return resolve({ file: null, songs: [], batchName: 'Unknown Upload' });
       }
+
+      // Extract batch name from filename (remove .csv extension)
+      const batchName = (file.originalFilename || 'Unknown Upload')
+        .replace(/\.csv$/i, '')
+        .trim();
 
       try {
         const songs = await parseCSV(file.filepath);
-        resolve({ file, songs });
+        resolve({ file, songs, batchName });
       } catch (error) {
         reject(error);
       }
@@ -449,7 +455,7 @@ async function findDuplicate(song: ParsedSong): Promise<DuplicateMatch | null> {
 /**
  * Enrich a song with AI classification and save to database
  */
-async function enrichAndSaveSong(song: ParsedSong, uploadBatchId: string) {
+async function enrichAndSaveSong(song: ParsedSong, uploadBatchId: string, uploadBatchName: string) {
   // Run Gemini classification
   const geminiResult = await classifySong(song.artist, song.title, {
     bpm: song.bpm
@@ -484,6 +490,7 @@ async function enrichAndSaveSong(song: ParsedSong, uploadBatchId: string) {
     aiErrorMessage: geminiResult?.error_message || null,
     // Upload tracking
     uploadBatchId,
+    uploadBatchName,
     reviewed: false
   };
 
