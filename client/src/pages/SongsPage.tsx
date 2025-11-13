@@ -25,6 +25,7 @@ export default function SongsPage() {
   const [selectedEnergy, setSelectedEnergy] = useState('all');
   const [selectedAccessibility, setSelectedAccessibility] = useState('all');
   const [selectedExplicit, setSelectedExplicit] = useState('all');
+  const [selectedBatchId, setSelectedBatchId] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Sort states
@@ -43,7 +44,7 @@ export default function SongsPage() {
   // Fetch songs when filters or page changes
   useEffect(() => {
     fetchSongs();
-  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, searchQuery, currentPage, sortBy, sortOrder]);
+  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, searchQuery, currentPage, sortBy, sortOrder]);
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -57,6 +58,7 @@ export default function SongsPage() {
         energy: selectedEnergy !== 'all' ? selectedEnergy : undefined,
         accessibility: selectedAccessibility !== 'all' ? selectedAccessibility : undefined,
         explicit: selectedExplicit !== 'all' ? selectedExplicit : undefined,
+        uploadBatchId: selectedBatchId !== 'all' ? selectedBatchId : undefined,
         search: searchQuery.trim() || undefined,
         sortBy,
         sortOrder,
@@ -201,6 +203,7 @@ export default function SongsPage() {
           selectedEnergy={selectedEnergy}
           selectedAccessibility={selectedAccessibility}
           selectedExplicit={selectedExplicit}
+          selectedBatchId={selectedBatchId}
           searchQuery={searchQuery}
           onSubgenreChange={(value) => {
             setSelectedSubgenre(value);
@@ -224,6 +227,10 @@ export default function SongsPage() {
           }}
           onExplicitChange={(value) => {
             setSelectedExplicit(value);
+            setCurrentPage(1);
+          }}
+          onBatchChange={(value) => {
+            setSelectedBatchId(value);
             setCurrentPage(1);
           }}
           onSearchChange={(value) => {
@@ -321,6 +328,7 @@ export default function SongsPage() {
           energy: selectedEnergy !== 'all' ? selectedEnergy : undefined,
           accessibility: selectedAccessibility !== 'all' ? selectedAccessibility : undefined,
           explicit: selectedExplicit !== 'all' ? selectedExplicit : undefined,
+          uploadBatchId: selectedBatchId !== 'all' ? selectedBatchId : undefined,
         }}
         totalSongs={totalSongs}
         selectedIsrcs={selectedIsrcs}

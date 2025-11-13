@@ -52,6 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const energy = req.query.energy as string;
     const accessibility = req.query.accessibility as string;
     const explicit = req.query.explicit as string;
+    const uploadBatchId = req.query.uploadBatchId as string;
     const search = req.query.search as string;
     const sortBy = (req.query.sortBy as string) || 'createdAt';
     const sortOrder = (req.query.sortOrder as string) || 'desc';
@@ -114,6 +115,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Explicit content filter
     if (explicit && explicit !== 'all') {
       where.aiExplicit = explicit;
+    }
+
+    // Upload batch filter
+    if (uploadBatchId && uploadBatchId !== 'all') {
+      where.uploadBatchId = uploadBatchId;
     }
 
     // Combine AND conditions if any exist

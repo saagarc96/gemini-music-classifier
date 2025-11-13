@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { FileDown, Upload } from 'lucide-react';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
@@ -10,6 +11,7 @@ import {
   SelectValue,
 } from './ui/select';
 import { SUBGENRES, ENERGY_LEVELS, ACCESSIBILITY_TYPES, EXPLICIT_TYPES, AI_STATUSES } from '../data/constants';
+import { getUploadBatches, type UploadBatch } from '../lib/api';
 
 interface FilterPanelProps {
   selectedSubgenre: string;
@@ -18,6 +20,7 @@ interface FilterPanelProps {
   selectedEnergy: string;
   selectedAccessibility: string;
   selectedExplicit: string;
+  selectedBatchId: string;
   searchQuery: string;
   onSubgenreChange: (value: string) => void;
   onStatusChange: (value: string) => void;
@@ -25,6 +28,7 @@ interface FilterPanelProps {
   onEnergyChange: (value: string) => void;
   onAccessibilityChange: (value: string) => void;
   onExplicitChange: (value: string) => void;
+  onBatchChange: (value: string) => void;
   onSearchChange: (value: string) => void;
   onExport: () => void;
   onUpload: () => void;
@@ -38,6 +42,7 @@ export function FilterPanel({
   selectedEnergy,
   selectedAccessibility,
   selectedExplicit,
+  selectedBatchId,
   searchQuery,
   onSubgenreChange,
   onStatusChange,
@@ -45,11 +50,37 @@ export function FilterPanel({
   onEnergyChange,
   onAccessibilityChange,
   onExplicitChange,
+  onBatchChange,
   onSearchChange,
   onExport,
   onUpload,
   totalCount,
 }: FilterPanelProps) {
+  const [uploadBatches, setUploadBatches] = useState<UploadBatch[]>([]);
+
+  // Fetch upload batches on mount
+  useEffect(() => {
+    async function fetchBatches() {
+      try {
+        const batches = await getUploadBatches();
+        setUploadBatches(batches);
+      } catch (error) {
+        console.error('Failed to load upload batches:', error);
+      }
+    }
+    fetchBatches();
+  }, []);
+
+  // Format date for display
+  function formatDate(dateString: string): string {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  }
+
   return (
     <div className="bg-zinc-900 rounded-lg p-6 border border-zinc-800">
       <div className="flex items-center justify-between mb-6">
@@ -221,6 +252,34 @@ export function FilterPanel({
                   className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
                 >
                   {type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="batch" className="text-zinc-300">Upload Batch</Label>
+          <Select value={selectedBatchId} onValueChange={onBatchChange}>
+            <SelectTrigger id="batch" className="bg-zinc-950 border-zinc-700 text-zinc-100">
+              <SelectValue placeholder="All Uploads" />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-800 max-h-[400px]">
+              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+                All Uploads
+              </SelectItem>
+              {uploadBatches.map((batch) => (
+                <SelectItem
+                  key={batch.uploadBatchId}
+                  value={batch.uploadBatchId}
+                  className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
+                >
+                  <div className="flex flex-col">
+                    <span>{batch.uploadBatchName}</span>
+                    <span className="text-xs text-zinc-400">
+                      {batch.totalSongs} songs · {formatDate(batch.uploadDate)}
+                    </span>
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
