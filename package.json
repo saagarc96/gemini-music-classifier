@@ -12,6 +12,7 @@
     "seed": "node scripts/seed.js",
     "enrich:playlist": "node scripts/enrich-playlist.cjs",
     "enrich:spotify": "node scripts/enrich-spotify-playlist.cjs",
+    "enrich:batch": "node scripts/batch-enrich-playlists.cjs",
     "process:playlist": "node src/playlist-batch-runner.js",
     "process:all": "node src/orchestrator.js",
     "monitor": "node src/monitor-batch-job.js",
@@ -53,6 +54,7 @@
     "fastest-levenshtein": "^1.0.16",
     "formidable": "^3.5.4",
     "jsonwebtoken": "^9.0.2",
+    "pg": "^8.16.3",
     "prisma": "^6.18.0",
     "uuid": "^13.0.0"
   },
