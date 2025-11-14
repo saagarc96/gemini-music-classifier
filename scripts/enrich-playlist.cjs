@@ -45,6 +45,7 @@ if (!csvPath) {
   console.error('  --explicit-only      Only run explicit content check');
   console.error('  --force-duplicates   Skip duplicate detection (import all songs)');
   console.error('  --dry-run            Preview duplicates without processing');
+  console.error('  --batch-name=NAME    Custom batch name for uploadBatchId');
   process.exit(1);
 }
 
@@ -55,7 +56,8 @@ const options = {
   explicitOnly: args.includes('--explicit-only'),
   forceDuplicates: args.includes('--force-duplicates'),
   dryRun: args.includes('--dry-run'),
-  concurrency: parseInt(args.find(a => a.startsWith('--concurrency='))?.split('=')[1] || '5')
+  concurrency: parseInt(args.find(a => a.startsWith('--concurrency='))?.split('=')[1] || '5'),
+  batchName: args.find(a => a.startsWith('--batch-name='))?.split('=')[1]
 };
 
 console.log('='.repeat(60));
@@ -67,7 +69,9 @@ console.log('='.repeat(60));
 console.log('');
 
 // Generate unique batch ID for this upload
-const uploadBatchId = uuidv4();
+// Use custom batch name if provided, otherwise generate UUID
+const uploadBatchId = options.batchName || uuidv4();
+console.log(`Upload Batch ID: ${uploadBatchId}\n`);
 
 // Extract batch name from CSV filename (remove .csv extension)
 const batchName = path.basename(csvPath, '.csv');
