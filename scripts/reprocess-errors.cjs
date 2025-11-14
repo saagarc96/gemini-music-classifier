@@ -7,8 +7,8 @@
  */
 
 const { PrismaClient } = require('@prisma/client');
-const { classifySongWithGemini } = require('../src/classifiers/gemini-classifier.cjs');
-const { classifyExplicit } = require('../src/classifiers/explicit-classifier.cjs');
+const { classifySong } = require('../src/classifiers/gemini-classifier.cjs');
+const { classifyExplicitContent } = require('../src/classifiers/explicit-classifier.cjs');
 
 const prisma = new PrismaClient();
 
@@ -63,9 +63,7 @@ async function reprocessErrors() {
           console.log(`  Reprocessing: ${song.artist} - ${song.title}`);
 
           // Run Gemini classification
-          const geminiResult = await classifySongWithGemini({
-            artist: song.artist,
-            title: song.title,
+          const geminiResult = await classifySong(song.artist, song.title, {
             bpm: song.bpm
           });
 
@@ -76,7 +74,7 @@ async function reprocessErrors() {
           }
 
           // Run explicit classification
-          const explicitResult = await classifyExplicit(song.artist, song.title);
+          const explicitResult = await classifyExplicitContent(song.artist, song.title);
 
           // Update database
           await prisma.song.update({
@@ -87,9 +85,9 @@ async function reprocessErrors() {
               aiSubgenre1: geminiResult.subgenre1,
               aiSubgenre2: geminiResult.subgenre2,
               aiSubgenre3: geminiResult.subgenre3,
-              aiExplicit: explicitResult.explicit,
+              aiExplicit: explicitResult.classification,
               aiReasoning: geminiResult.reasoning,
-              aiContextUsed: geminiResult.context_used,
+              aiContextUsed: geminiResult.context,
               aiStatus: 'SUCCESS',
               modifiedAt: new Date()
             }
