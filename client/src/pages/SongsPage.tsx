@@ -8,6 +8,14 @@ import { UploadModal } from '../components/UploadModal';
 import { toast } from 'sonner';
 import { getSongs, updateSong, Song, UpdateSongPayload } from '../lib/api';
 import Header from '../components/Header';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
+import { Button } from '../components/ui/button';
 
 export default function SongsPage() {
   const navigate = useNavigate();
@@ -39,12 +47,12 @@ export default function SongsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalSongs, setTotalSongs] = useState(0);
-  const limit = 50;
+  const [limit, setLimit] = useState(50);
 
   // Fetch songs when filters or page changes
   useEffect(() => {
     fetchSongs();
-  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, searchQuery, currentPage, sortBy, sortOrder]);
+  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, searchQuery, currentPage, sortBy, sortOrder, limit]);
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -73,6 +81,11 @@ export default function SongsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLimitChange = (newLimit: string) => {
+    setLimit(parseInt(newLimit));
+    setCurrentPage(1); // Reset to page 1 to avoid showing invalid page
   };
 
   const handleSongClick = (song: Song) => {
@@ -266,35 +279,68 @@ export default function SongsPage() {
                 <div className="text-sm text-zinc-500">
                   Page {currentPage} of {totalPages} • {totalSongs} total songs
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handlePageChange(1)}
-                    disabled={currentPage === 1}
-                    className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700"
-                  >
-                    First
-                  </button>
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700"
-                  >
-                    Next
-                  </button>
-                  <button
-                    onClick={() => handlePageChange(totalPages)}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700"
-                  >
-                    Last
-                  </button>
+
+                <div className="flex items-center gap-4">
+                  {/* Per-page selector */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-zinc-400">Show:</span>
+                    <Select value={limit.toString()} onValueChange={handleLimitChange}>
+                      <SelectTrigger className="w-[130px] bg-zinc-950 border-zinc-700 text-zinc-100 h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-800">
+                        <SelectItem value="25" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+                          25 per page
+                        </SelectItem>
+                        <SelectItem value="50" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+                          50 per page
+                        </SelectItem>
+                        <SelectItem value="100" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+                          100 per page
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Pagination buttons */}
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handlePageChange(1)}
+                      disabled={currentPage === 1}
+                      variant="outline"
+                      size="sm"
+                      className="bg-zinc-950 border-zinc-700 hover:bg-zinc-800 text-zinc-100 disabled:opacity-50"
+                    >
+                      First
+                    </Button>
+                    <Button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      variant="outline"
+                      size="sm"
+                      className="bg-zinc-950 border-zinc-700 hover:bg-zinc-800 text-zinc-100 disabled:opacity-50"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      variant="outline"
+                      size="sm"
+                      className="bg-zinc-950 border-zinc-700 hover:bg-zinc-800 text-zinc-100 disabled:opacity-50"
+                    >
+                      Next
+                    </Button>
+                    <Button
+                      onClick={() => handlePageChange(totalPages)}
+                      disabled={currentPage === totalPages}
+                      variant="outline"
+                      size="sm"
+                      className="bg-zinc-950 border-zinc-700 hover:bg-zinc-800 text-zinc-100 disabled:opacity-50"
+                    >
+                      Last
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
