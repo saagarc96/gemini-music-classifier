@@ -448,6 +448,8 @@ function isRecent(date) {
 async function detectAndResolveDuplicates(songs, options) {
   const songsToProcess = [];
   const decisions = {};
+  let autoSkipped100Percent = 0;
+  let fuzzyPrompted = 0;
 
   for (const song of songs) {
     // Check for duplicates in database
@@ -459,6 +461,13 @@ async function detectAndResolveDuplicates(songs, options) {
       continue;
     }
 
+    // NEW: Auto-skip 100% exact duplicates without prompting
+    if (duplicate.similarity === 100) {
+      console.log(`  ✓ Auto-skipped: ${song.artist} - ${song.title} (100% exact match)`);
+      autoSkipped100Percent++;
+      continue; // Don't add to songsToProcess, don't prompt
+    }
+
     // Duplicate found - handle based on "always new" mode
     if (alwaysNewMode) {
       songsToProcess.push(song);
@@ -466,10 +475,12 @@ async function detectAndResolveDuplicates(songs, options) {
         action: 'new',
         existingSong: duplicate.song
       };
+      fuzzyPrompted++;
       continue;
     }
 
-    // Show duplicate prompt
+    // Show duplicate prompt for fuzzy matches (<100%)
+    fuzzyPrompted++;
     console.log('\n' + '='.repeat(60));
     console.log('🔍 Found potential duplicate');
     console.log(`   Similarity: ${duplicate.similarity.toFixed(2)}%`);
@@ -533,6 +544,20 @@ async function detectAndResolveDuplicates(songs, options) {
     } else {
       console.log('  → Invalid choice, skipping song\n');
     }
+  }
+
+  // Print summary
+  if (autoSkipped100Percent > 0 || fuzzyPrompted > 0) {
+    console.log('\n' + '='.repeat(60));
+    console.log('Duplicate Resolution Summary:');
+    if (autoSkipped100Percent > 0) {
+      console.log(`  Auto-skipped (100% exact match): ${autoSkipped100Percent}`);
+    }
+    if (fuzzyPrompted > 0) {
+      console.log(`  User prompted (fuzzy match): ${fuzzyPrompted}`);
+    }
+    console.log('='.repeat(60));
+    console.log('');
   }
 
   return { songsToProcess, decisions };
