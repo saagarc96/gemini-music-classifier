@@ -357,16 +357,24 @@ async function enrichSong(song, options, duplicateDecision, uploadBatchId) {
 function loadCSV(csvPath) {
   return new Promise((resolve, reject) => {
     const songs = [];
+    let skippedNoISRC = 0;
 
     fs.createReadStream(csvPath)
       .pipe(csv())
       .on('data', (row) => {
+        // Skip rows without ISRC
+        const isrc = row.isrc || row.ISRC;
+        if (!isrc || isrc.trim() === '') {
+          skippedNoISRC++;
+          return;
+        }
+
         // Parse BPM as integer
         const bpmValue = row.bpm || row.BPM;
         const bpm = bpmValue ? parseInt(bpmValue, 10) : null;
 
         songs.push({
-          isrc: row.isrc || row.ISRC,
+          isrc: isrc.trim(),
           title: row.title || row.Title,
           artist: row.artist || row.Artist,
           bpm: bpm,
@@ -376,7 +384,12 @@ function loadCSV(csvPath) {
           source_file: row.source_file || row['Source File'] || null
         });
       })
-      .on('end', () => resolve(songs))
+      .on('end', () => {
+        if (skippedNoISRC > 0) {
+          console.log(`  ⚠ Skipped ${skippedNoISRC} songs without ISRC`);
+        }
+        resolve(songs);
+      })
       .on('error', reject);
   });
 }
