@@ -461,11 +461,32 @@ function isRecent(date) {
 async function detectAndResolveDuplicates(songs, options) {
   const songsToProcess = [];
   const decisions = {};
-  let autoSkipped100Percent = 0;
+  let autoSkippedISRC = 0;
+  let autoSkippedFuzzy = 0;
   let fuzzyPrompted = 0;
 
   for (const song of songs) {
-    // Check for duplicates in database
+    // When --force-duplicates is used, only check for ISRC matches
+    if (options.forceDuplicates) {
+      // Only check for exact ISRC match in database
+      if (song.isrc) {
+        const existing = await prisma.song.findUnique({
+          where: { isrc: song.isrc }
+        });
+
+        if (existing) {
+          console.log(`  ✓ Auto-skipped: ${song.artist} - ${song.title} (ISRC exists: ${song.isrc})`);
+          autoSkippedISRC++;
+          continue; // Skip this song entirely
+        }
+      }
+
+      // No ISRC match found, proceed with enrichment
+      songsToProcess.push(song);
+      continue;
+    }
+
+    // Default behavior: Full duplicate detection with fuzzy matching
     const duplicate = await findDuplicate(song);
 
     if (!duplicate) {
@@ -474,10 +495,10 @@ async function detectAndResolveDuplicates(songs, options) {
       continue;
     }
 
-    // NEW: Auto-skip 100% exact duplicates without prompting
+    // Auto-skip 100% exact duplicates without prompting
     if (duplicate.similarity === 100) {
       console.log(`  ✓ Auto-skipped: ${song.artist} - ${song.title} (100% exact match)`);
-      autoSkipped100Percent++;
+      autoSkippedISRC++;
       continue; // Don't add to songsToProcess, don't prompt
     }
 
@@ -488,7 +509,7 @@ async function detectAndResolveDuplicates(songs, options) {
         action: 'new',
         existingSong: duplicate.song
       };
-      fuzzyPrompted++;
+      autoSkippedFuzzy++;
       continue;
     }
 
@@ -560,11 +581,14 @@ async function detectAndResolveDuplicates(songs, options) {
   }
 
   // Print summary
-  if (autoSkipped100Percent > 0 || fuzzyPrompted > 0) {
+  if (autoSkippedISRC > 0 || autoSkippedFuzzy > 0 || fuzzyPrompted > 0) {
     console.log('\n' + '='.repeat(60));
     console.log('Duplicate Resolution Summary:');
-    if (autoSkipped100Percent > 0) {
-      console.log(`  Auto-skipped (100% exact match): ${autoSkipped100Percent}`);
+    if (autoSkippedISRC > 0) {
+      console.log(`  Auto-skipped (ISRC match): ${autoSkippedISRC}`);
+    }
+    if (autoSkippedFuzzy > 0) {
+      console.log(`  Auto-skipped (fuzzy, always-new mode): ${autoSkippedFuzzy}`);
     }
     if (fuzzyPrompted > 0) {
       console.log(`  User prompted (fuzzy match): ${fuzzyPrompted}`);
