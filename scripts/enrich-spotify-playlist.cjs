@@ -90,7 +90,7 @@ async function fetchSpotifyMetadata(songs) {
 /**
  * Process a single song
  */
-async function processSong(song, spotifyMetadata) {
+async function processSong(song, spotifyMetadata, batchName = null, batchId = null) {
   try {
     // Get Spotify metadata
     const spotifyTrack = spotifyMetadata.get(song.spotifyTrackId);
@@ -120,6 +120,8 @@ async function processSong(song, spotifyMetadata) {
       artwork: spotifyTrack?.albumArt || null,
       sourceFile: spotifyTrack?.previewUrl || null,
       spotifyTrackId: song.spotifyTrackId,
+      spotifyPreviewUrl: spotifyTrack?.previewUrl || null,
+      spotifyArtworkUrl: spotifyTrack?.albumArt || null,
 
       // AI classifications
       aiStatus: geminiResult.status,
@@ -132,6 +134,10 @@ async function processSong(song, spotifyMetadata) {
       aiSubgenre1: geminiResult.subgenre1 || null,
       aiSubgenre2: geminiResult.subgenre2 || null,
       aiSubgenre3: geminiResult.subgenre3 || null,
+
+      // Batch tracking
+      uploadBatchId: batchId,
+      uploadBatchName: batchName,
 
       // Review status (needs curator review)
       reviewed: false,
@@ -172,7 +178,7 @@ async function processSong(song, spotifyMetadata) {
 /**
  * Process songs with concurrency control
  */
-async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency) {
+async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency, playlistName = null, batchId = null) {
   const results = [];
 
   for (let i = 0; i < songs.length; i += concurrency) {
@@ -183,7 +189,7 @@ async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency) 
     console.log(`\nProcessing batch ${batchNumber}/${totalBatches} (songs ${i + 1}-${Math.min(i + concurrency, songs.length)})...`);
 
     const batchResults = await Promise.all(
-      batch.map(song => processSong(song, spotifyMetadata))
+      batch.map(song => processSong(song, spotifyMetadata, playlistName, batchId))
     );
 
     results.push(...batchResults);
@@ -266,10 +272,16 @@ async function main() {
       process.exit(1);
     }
 
+    // Extract playlist name from filename and generate batch ID
+    const playlistName = path.basename(csvPath, '.csv');
+    const batchId = `spotify-${playlistName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
+
     console.log('='.repeat(60));
     console.log('SPOTIFY PLAYLIST ENRICHMENT');
     console.log('='.repeat(60));
     console.log(`Input file: ${csvPath}`);
+    console.log(`Playlist name: ${playlistName}`);
+    console.log(`Batch ID: ${batchId}`);
     console.log(`Concurrency: ${CONCURRENCY} songs at a time`);
     console.log('='.repeat(60));
 
@@ -295,7 +307,7 @@ async function main() {
 
     // Process songs
     console.log('\nStarting AI enrichment...\n');
-    const results = await processSongsWithConcurrency(songs, spotifyMetadata, CONCURRENCY);
+    const results = await processSongsWithConcurrency(songs, spotifyMetadata, CONCURRENCY, playlistName, batchId);
 
     // Export results
     const outputFilename = `spotify-enrichment-${Date.now()}.csv`;

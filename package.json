@@ -12,6 +12,7 @@
     "seed": "node scripts/seed.js",
     "enrich:playlist": "node scripts/enrich-playlist.cjs",
     "enrich:spotify": "node scripts/enrich-spotify-playlist.cjs",
+    "enrich:batch": "node scripts/batch-enrich-playlists.cjs",
     "process:playlist": "node src/playlist-batch-runner.js",
     "process:all": "node src/orchestrator.js",
     "monitor": "node src/monitor-batch-job.js",
@@ -39,6 +40,7 @@
     "@google/genai": "^1.3.0",
     "@google/generative-ai": "^0.21.0",
     "@prisma/client": "^6.18.0",
+    "@types/formidable": "^3.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@vercel/postgres": "^0.10.0",
     "axios": "^1.13.1",
@@ -50,8 +52,11 @@
     "csv-writer": "^1.6.0",
     "dotenv": "^16.4.5",
     "fastest-levenshtein": "^1.0.16",
+    "formidable": "^3.5.4",
     "jsonwebtoken": "^9.0.2",
-    "prisma": "^6.18.0"
+    "pg": "^8.16.3",
+    "prisma": "^6.18.0",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0"

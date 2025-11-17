@@ -47,8 +47,14 @@ model Song {
   artwork     String?
   sourceFile  String? @map("source_file")
 
+  // Media URLs
+  s3Url               String? @map("s3_url")
+  artworkUrl          String? @map("artwork_url")
+
   // Spotify integration
-  spotifyTrackId String? @map("spotify_track_id") @db.VarChar(50)
+  spotifyTrackId      String? @map("spotify_track_id") @db.VarChar(50)
+  spotifyPreviewUrl   String? @map("spotify_preview_url")
+  spotifyArtworkUrl   String? @map("spotify_artwork_url")
 
   // AI classifications (editable by curators)
   aiStatus        String? @map("ai_status") @db.VarChar(50)
@@ -74,6 +80,12 @@ model Song {
   createdById  String?   @map("created_by_id")
   creator      User?     @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
+  // Duplicate tracking
+  isDuplicate     Boolean  @default(false) @map("is_duplicate")
+  originalIsrc    String?  @map("original_isrc") @db.VarChar(12)
+  uploadBatchId   String?  @map("upload_batch_id") @db.VarChar(50)
+  uploadBatchName String?  @map("upload_batch_name") @db.VarChar(255)
+
   // Timestamps
   createdAt  DateTime @default(now()) @map("created_at")
   modifiedAt DateTime @default(now()) @updatedAt @map("modified_at")
@@ -87,5 +99,9 @@ model Song {
   @@index([spotifyTrackId], map: "idx_spotify_track_id")
   @@index([reviewedById], map: "idx_reviewed_by_id")
   @@index([createdById], map: "idx_created_by_id")
+  @@index([isDuplicate], map: "idx_is_duplicate")
+  @@index([originalIsrc], map: "idx_original_isrc")
+  @@index([uploadBatchId], map: "idx_upload_batch_id")
+  @@index([uploadBatchName], map: "idx_upload_batch_name")
   @@map("songs")
 }

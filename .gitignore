@@ -16,6 +16,7 @@ config/secrets.json
 
 # Progress tracking
 playlists/processed/
+playlists/playlists-to-import/
 
 # OS
 .DS_Store

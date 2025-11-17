@@ -52,6 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const energy = req.query.energy as string;
     const accessibility = req.query.accessibility as string;
     const explicit = req.query.explicit as string;
+    const uploadBatchId = req.query.uploadBatchId as string;
     const search = req.query.search as string;
     const sortBy = (req.query.sortBy as string) || 'createdAt';
     const sortOrder = (req.query.sortOrder as string) || 'desc';
@@ -116,6 +117,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       where.aiExplicit = explicit;
     }
 
+    // Upload batch filter
+    if (uploadBatchId && uploadBatchId !== 'all') {
+      where.uploadBatchId = uploadBatchId;
+    }
+
     // Combine AND conditions if any exist
     if (andConditions.length > 0) {
       where.AND = andConditions;
@@ -155,9 +161,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       energy: song.energy,
       bpm: song.bpm,
       subgenre: song.subgenre,
-      artwork: song.artwork,
-      source_file: song.sourceFile,
+      artwork: song.artworkUrl || song.artwork,
+      source_file: song.s3Url || song.sourceFile,
       spotify_track_id: song.spotifyTrackId,
+      spotify_preview_url: song.spotifyPreviewUrl,
+      spotify_artwork_url: song.spotifyArtworkUrl,
       ai_status: song.aiStatus,
       ai_error_message: song.aiErrorMessage,
       ai_reasoning: song.aiReasoning,

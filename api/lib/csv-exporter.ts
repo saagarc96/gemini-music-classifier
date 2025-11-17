@@ -192,10 +192,7 @@ export function exportSongsToCSV(
   // Join with newlines
   const csvContent = csvLines.join('\n');
 
-  // Add UTF-8 BOM for Excel compatibility
-  const BOM = '\uFEFF';
-
-  return BOM + csvContent;
+  return csvContent;
 }
 
 /**
