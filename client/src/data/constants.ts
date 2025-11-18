@@ -4,7 +4,7 @@
  * AUTO-GENERATED from data/subgenres.json
  * DO NOT EDIT MANUALLY - Run: npm run generate:constants
  *
- * Last generated: 2025-11-05T18:38:35.254Z
+ * Last generated: 2025-11-18T05:50:08.199Z
  */
 
 export const SUBGENRES = [
@@ -73,9 +73,13 @@ export const SUBGENRES = [
   "Christmas Acoustic",
   "Christmas Classics",
   "Christmas Coffeehouse",
+  "Christmas Country",
+  "Christmas Folk",
+  "Christmas Funk & Soul",
   "Christmas Indie",
   "Christmas Indie Acoustic",
   "Christmas Jazz",
+  "Christmas Pop",
   "Classic Bachata",
   "Classic Bossa Nova",
   "Classic Country Pop",

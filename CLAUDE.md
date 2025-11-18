@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a music classification system that uses Google Gemini's Batch API to analyze songs from playlists, plus a web-based review interface for human curation. It classifies songs by:
 - Energy Level (Very Low → Very High)
 - Accessibility (Eclectic / Timeless / Commercial / Cheesy)
-- Subgenres (from a curated list of 167 subgenres across 10 categories)
+- Subgenres (from a curated list of 171 subgenres across 10 categories)
 
 The system is built for Raina Music, a B2B music streaming company serving hospitality and retail clients. It processes ~20,000 songs across 120 playlists at 50% cost discount via batch processing.
 
@@ -37,7 +37,7 @@ npm run enrich:playlist playlist.csv --explicit-only      # Only run explicit ch
 **What it does:**
 1. Reads CSV playlist file
 2. For each song:
-   - Runs Gemini classification (energy, accessibility, 3 subgenres, reasoning)
+   - Runs Gemini classification (energy, accessibility, 3 subgenres from 171 available, reasoning)
    - Runs Parallel AI explicit content check (Explicit/Suggestive/Family Friendly)
 3. Saves results directly to database (Postgres via Prisma)
 4. Exports enriched CSV to `outputs/` directory
@@ -185,7 +185,7 @@ npm run seed             # Import 50 songs from CSV
 Subgenres are stored in a single source of truth that automatically updates both the classification prompt and frontend UI.
 
 **File Structure:**
-- `data/subgenres.json` - **Single source of truth** (167 subgenres across 10 categories)
+- `data/subgenres.json` - **Single source of truth** (171 subgenres across 10 categories)
 - `prompts/classification-prompt.md` - Contains `{{SUBGENRES_LIST}}` placeholder (auto-injected at runtime)
 - `client/src/data/constants.ts` - Auto-generated TypeScript constants (DO NOT edit manually)
 - `src/utils/subgenre-loader.cjs` - Utility for loading and formatting subgenres
@@ -402,7 +402,7 @@ api/
 client/                        # React frontend
 ├── src/
 │   ├── components/
-│   │   ├── FilterPanel.tsx   # 243 subgenres, 5 filter types, Export button (NEW)
+│   │   ├── FilterPanel.tsx   # 171 subgenres, 5 filter types, Export button
 │   │   ├── SongTable.tsx     # Paginated table, checkboxes for selection (NEW)
 │   │   ├── ExportModal.tsx   # CSV export UI with preview (NEW)
 │   │   ├── ReviewModal.tsx   # Edit interface
