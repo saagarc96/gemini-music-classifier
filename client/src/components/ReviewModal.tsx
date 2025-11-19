@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ChevronRight, User, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, User, X } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Dialog, DialogContent } from './ui/dialog';
 import { AudioPlayer } from './AudioPlayer';
 import { Label } from './ui/label';
@@ -313,35 +314,50 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
 
           {/* AI Reasoning - Read Only */}
           {song.ai_reasoning && (
-            <div className="space-y-2">
-              <Label className="text-zinc-300">AI Reasoning</Label>
-              <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-sm text-zinc-400">
-                {song.ai_reasoning}
-              </div>
-            </div>
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-3 bg-zinc-900 border border-zinc-800 rounded-md hover:bg-zinc-800 transition-colors group">
+                <Label className="text-zinc-300 cursor-pointer">AI Reasoning</Label>
+                <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-2">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-sm text-zinc-400">
+                  {song.ai_reasoning}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
           {/* AI Context - Read Only */}
           {song.ai_context_used && (
-            <div className="space-y-2">
-              <Label className="text-zinc-300">AI Context Used</Label>
-              <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-sm text-zinc-400">
-                {song.ai_context_used}
-              </div>
-            </div>
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-3 bg-zinc-900 border border-zinc-800 rounded-md hover:bg-zinc-800 transition-colors group">
+                <Label className="text-zinc-300 cursor-pointer">AI Context Used</Label>
+                <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-2">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-sm text-zinc-400">
+                  {song.ai_context_used}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
           {/* Curator Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes" className="text-zinc-300">Curator Notes (Optional)</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add any notes about this classification..."
-              className="bg-zinc-900 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 min-h-24"
-            />
-          </div>
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center justify-between w-full p-3 bg-zinc-900 border border-zinc-800 rounded-md hover:bg-zinc-800 transition-colors group">
+              <Label className="text-zinc-300 cursor-pointer">Curator Notes (Optional)</Label>
+              <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add any notes about this classification..."
+                className="bg-zinc-900 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 min-h-24"
+              />
+            </CollapsibleContent>
+          </Collapsible>
 
           {/* Actions */}
           <div className="flex justify-between pt-4 border-t border-zinc-800">
