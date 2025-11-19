@@ -82,7 +82,7 @@ export function FilterPanel({
   }
 
   return (
-    <div className="bg-zinc-900 rounded-lg p-6 border border-zinc-800">
+    <div className="bg-black-900 rounded-lg p-6 border border-zinc-800">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-zinc-100">Filters</h2>
         <div className="flex items-center gap-3">
@@ -90,19 +90,17 @@ export function FilterPanel({
             Showing {totalCount} {totalCount === 1 ? 'song' : 'songs'}
           </span>
           <Button
-            variant="outline"
             size="sm"
             onClick={onUpload}
-            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            className="bg-white text-black"
           >
             <Upload className="w-4 h-4 mr-2" />
             Upload CSV
           </Button>
           <Button
-            variant="outline"
             size="sm"
             onClick={onExport}
-            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            className="bg-white text-black"
             disabled={totalCount === 0}
           >
             <FileDown className="w-4 h-4 mr-2" />
