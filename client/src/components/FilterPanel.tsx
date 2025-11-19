@@ -92,7 +92,7 @@ export function FilterPanel({
           <Button
             size="sm"
             onClick={onUpload}
-            className="bg-white text-black"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Upload className="w-4 h-4 mr-2" />
             Upload CSV
@@ -100,7 +100,7 @@ export function FilterPanel({
           <Button
             size="sm"
             onClick={onExport}
-            className="bg-white text-black"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
             disabled={totalCount === 0}
           >
             <FileDown className="w-4 h-4 mr-2" />
