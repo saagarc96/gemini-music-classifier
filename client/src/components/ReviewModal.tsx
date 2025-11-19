@@ -239,30 +239,32 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
             <div className="space-y-2">
               <Label htmlFor="subgenre2" className="text-zinc-300">Subgenre 2</Label>
               <div className="flex items-center gap-2">
-                <Select value={subgenre2 || ''} onValueChange={(val) => setSubgenre2(val || undefined)}>
-                  <SelectTrigger id="subgenre2" className="bg-zinc-900 border-zinc-800 text-zinc-100">
-                    <SelectValue placeholder="Select secondary subgenre (optional)" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-800">
-                    <SelectItem value="_none" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
-                      None
-                    </SelectItem>
-                    {SUBGENRES.map((genre) => (
-                      <SelectItem
-                        key={genre}
-                        value={genre}
-                        className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
-                      >
-                        {genre}
+                <div className="flex-1">
+                  <Select value={subgenre2 || ''} onValueChange={(val) => setSubgenre2(val || undefined)}>
+                    <SelectTrigger id="subgenre2" className="w-full bg-zinc-900 border-zinc-800 text-zinc-100">
+                      <SelectValue placeholder="Select secondary subgenre (optional)" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-zinc-800">
+                      <SelectItem value="_none" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+                        None
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {SUBGENRES.map((genre) => (
+                        <SelectItem
+                          key={genre}
+                          value={genre}
+                          className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
+                        >
+                          {genre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 {subgenre2 && subgenre2 !== '_none' && (
                   <button
                     type="button"
                     onClick={clearSubgenre2}
-                    className="p-1.5 rounded-md text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                    style={{ padding: '6px', borderRadius: '6px', backgroundColor: '#7f1d1d', color: '#ef4444' }}
                     title="Clear subgenre 2"
                   >
                     <X className="w-4 h-4" />
@@ -274,30 +276,32 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
             <div className="space-y-2">
               <Label htmlFor="subgenre3" className="text-zinc-300">Subgenre 3</Label>
               <div className="flex items-center gap-2">
-                <Select value={subgenre3 || ''} onValueChange={(val) => setSubgenre3(val || undefined)}>
-                  <SelectTrigger id="subgenre3" className="bg-zinc-900 border-zinc-800 text-zinc-100">
-                    <SelectValue placeholder="Select tertiary subgenre (optional)" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-800">
-                    <SelectItem value="_none" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
-                      None
-                    </SelectItem>
-                    {SUBGENRES.map((genre) => (
-                      <SelectItem
-                        key={genre}
-                        value={genre}
-                        className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
-                      >
-                        {genre}
+                <div className="flex-1">
+                  <Select value={subgenre3 || ''} onValueChange={(val) => setSubgenre3(val || undefined)}>
+                    <SelectTrigger id="subgenre3" className="w-full bg-zinc-900 border-zinc-800 text-zinc-100">
+                      <SelectValue placeholder="Select tertiary subgenre (optional)" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-zinc-800">
+                      <SelectItem value="_none" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+                        None
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {SUBGENRES.map((genre) => (
+                        <SelectItem
+                          key={genre}
+                          value={genre}
+                          className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
+                        >
+                          {genre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 {subgenre3 && subgenre3 !== '_none' && (
                   <button
                     type="button"
                     onClick={clearSubgenre3}
-                    className="p-1.5 rounded-md text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                    style={{ padding: '6px', borderRadius: '6px', backgroundColor: '#7f1d1d', color: '#ef4444' }}
                     title="Clear subgenre 3"
                   >
                     <X className="w-4 h-4" />
