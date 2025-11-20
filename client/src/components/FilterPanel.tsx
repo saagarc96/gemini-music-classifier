@@ -63,7 +63,11 @@ export function FilterPanel({
     async function fetchBatches() {
       try {
         const batches = await getUploadBatches();
-        setUploadBatches(batches);
+        // Sort by upload date descending (most recent first)
+        const sortedBatches = batches.sort((a, b) => {
+          return new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime();
+        });
+        setUploadBatches(sortedBatches);
       } catch (error) {
         console.error('Failed to load upload batches:', error);
       }
@@ -82,7 +86,7 @@ export function FilterPanel({
   }
 
   return (
-    <div className="bg-black-900 rounded-lg p-6 border border-zinc-800">
+    <div className="bg-black-900 rounded-lg p-6 border border-zinc-700">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-zinc-100">Filters</h2>
         <div className="flex items-center gap-3">
@@ -127,15 +131,15 @@ export function FilterPanel({
             <SelectTrigger id="subgenre" className="bg-zinc-950 border-zinc-700 text-zinc-100">
               <SelectValue placeholder="All subgenres" />
             </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800 max-h-80">
-              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+            <SelectContent className="bg-zinc-900 border-zinc-700 max-h-80">
+              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
                 All Subgenres
               </SelectItem>
               {SUBGENRES.map((genre) => (
                 <SelectItem
                   key={genre}
                   value={genre}
-                  className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
+                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
                 >
                   {genre}
                 </SelectItem>
@@ -150,15 +154,15 @@ export function FilterPanel({
             <SelectTrigger id="status" className="bg-zinc-950 border-zinc-700 text-zinc-100">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800">
-              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+            <SelectContent className="bg-zinc-900 border-zinc-700">
+              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
                 All Statuses
               </SelectItem>
               {AI_STATUSES.map((status) => (
                 <SelectItem
                   key={status}
                   value={status}
-                  className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
+                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
                 >
                   {status}
                 </SelectItem>
@@ -173,14 +177,14 @@ export function FilterPanel({
             <SelectTrigger id="reviewed" className="bg-zinc-950 border-zinc-700 text-zinc-100">
               <SelectValue placeholder="All" />
             </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800">
-              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+            <SelectContent className="bg-zinc-900 border-zinc-700">
+              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
                 All
               </SelectItem>
-              <SelectItem value="unreviewed" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+              <SelectItem value="unreviewed" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
                 Unreviewed Only
               </SelectItem>
-              <SelectItem value="reviewed" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+              <SelectItem value="reviewed" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
                 Reviewed Only
               </SelectItem>
             </SelectContent>
@@ -193,15 +197,15 @@ export function FilterPanel({
             <SelectTrigger id="energy" className="bg-zinc-950 border-zinc-700 text-zinc-100">
               <SelectValue placeholder="All energy levels" />
             </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800">
-              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+            <SelectContent className="bg-zinc-900 border-zinc-700">
+              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
                 All Energy Levels
               </SelectItem>
               {ENERGY_LEVELS.map((level) => (
                 <SelectItem
                   key={level}
                   value={level}
-                  className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
+                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
                 >
                   {level}
                 </SelectItem>
@@ -216,15 +220,15 @@ export function FilterPanel({
             <SelectTrigger id="accessibility" className="bg-zinc-950 border-zinc-700 text-zinc-100">
               <SelectValue placeholder="All" />
             </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800">
-              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+            <SelectContent className="bg-zinc-900 border-zinc-700">
+              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
                 All
               </SelectItem>
               {ACCESSIBILITY_TYPES.map((type) => (
                 <SelectItem
                   key={type}
                   value={type}
-                  className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
+                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
                 >
                   {type}
                 </SelectItem>
@@ -239,15 +243,15 @@ export function FilterPanel({
             <SelectTrigger id="explicit" className="bg-zinc-950 border-zinc-700 text-zinc-100">
               <SelectValue placeholder="All" />
             </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800">
-              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+            <SelectContent className="bg-zinc-900 border-zinc-700">
+              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
                 All
               </SelectItem>
               {EXPLICIT_TYPES.map((type) => (
                 <SelectItem
                   key={type}
                   value={type}
-                  className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
+                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
                 >
                   {type}
                 </SelectItem>
@@ -262,22 +266,17 @@ export function FilterPanel({
             <SelectTrigger id="batch" className="bg-zinc-950 border-zinc-700 text-zinc-100">
               <SelectValue placeholder="All Uploads" />
             </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800 max-h-[400px]">
-              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
+            <SelectContent className="bg-zinc-900 border-zinc-700 max-h-80">
+              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
                 All Uploads
               </SelectItem>
               {uploadBatches.map((batch) => (
                 <SelectItem
                   key={batch.uploadBatchId}
                   value={batch.uploadBatchId}
-                  className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
+                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
                 >
-                  <div className="flex flex-col">
-                    <span>{batch.uploadBatchName}</span>
-                    <span className="text-xs text-zinc-400">
-                      {batch.totalSongs} songs · {formatDate(batch.uploadDate)}
-                    </span>
-                  </div>
+                  {batch.uploadBatchName}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -379,7 +379,7 @@ function loadCSV(csvPath) {
 
         songs.push({
           isrc: isrc.trim(),
-          title: row.title || row.Title,
+          title: row.title || row.Title || row.Song,
           artist: row.artist || row.Artist,
           bpm: bpm,
           energy: row.energy || row.Energy || null,

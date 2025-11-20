@@ -46,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       _count: {
         id: true
       },
-      _min: {
+      _max: {
         createdAt: true
       }
     });
@@ -64,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return {
           uploadBatchId: batch.uploadBatchId,
           uploadBatchName: batch.uploadBatchName || 'Unknown Upload',
-          uploadDate: batch._min.createdAt,
+          uploadDate: batch._max.createdAt,
           totalSongs: batch._count.id,
           reviewedSongs: reviewedCount,
           unreviewedSongs: batch._count.id - reviewedCount
