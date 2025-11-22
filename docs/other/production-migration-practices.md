@@ -5,7 +5,7 @@ Since we've discovered that Vercel serverless functions always connect to the pr
 ## Core Principles
 
 1. **Always backup before migrations**
-2. **Test migration SQL on dev database first** (validate syntax/logic)
+2. **Review migration SQL before applying** (validate syntax/logic)
 3. **Use additive changes when possible** (backwards compatible)
 4. **Plan rollback strategy before executing**
 5. **Perform migrations during low-traffic periods**
@@ -28,37 +28,25 @@ ls -lh backups/
 # Should show recent .sql file with reasonable size
 ```
 
-### 2. Test Migration on Dev Database
+### 2. Review Migration SQL Locally
 
-Even though your app won't connect to it, the dev database is perfect for validating migration SQL:
+Review the generated migration SQL before applying to production:
 
 ```bash
-# Start dev database
-npm run dev:db:start
+# Create migration (doesn't apply yet)
+npx prisma migrate dev --name add_my_feature --create-only
 
-# Apply migration to dev database first
-npm run dev:migrate
-
-# Verify schema in Prisma Studio
-npm run dev:studio
+# Review the generated SQL
+cat prisma/migrations/[timestamp]_add_my_feature/migration.sql
 ```
 
 **What to check:**
-- Migration runs without errors
-- Schema changes are correct
-- No data loss on dev database
-- Foreign key constraints work
-- Indexes are created properly
+- Migration SQL is correct
+- No `DROP TABLE` or `DROP COLUMN` commands (unless intentional)
+- Foreign key constraints are properly defined
+- Indexes are created where needed
+- Default values for `NOT NULL` columns are specified
 
-### 3. Review Generated Migration SQL
-
-Prisma generates SQL in `prisma/migrations/[timestamp]_[name]/migration.sql`.
-
-**Review for:**
-- `DROP TABLE` commands (extremely dangerous)
-- `ALTER TABLE ... DROP COLUMN` (data loss)
-- Missing `NOT NULL` defaults (will fail on existing rows)
-- Complex multi-table changes (higher risk)
 
 ## Migration Execution Strategy
 
@@ -70,16 +58,13 @@ Prisma generates SQL in `prisma/migrations/[timestamp]_[name]/migration.sql`.
 # 1. Backup production
 npm run prod:backup
 
-# 2. Create migration
-npx prisma migrate dev --name add_playlist_table
+# 2. Create migration (review only, don't apply yet)
+npx prisma migrate dev --name add_playlist_table --create-only
 
-# 3. Test on dev database
-npm run dev:migrate
+# 3. Review the generated SQL
+cat prisma/migrations/*/migration.sql
 
-# 4. Verify in dev Prisma Studio
-npm run dev:studio
-
-# 5. Apply to production
+# 4. Apply to production
 npx prisma migrate deploy
 
 # 6. Verify production
@@ -112,7 +97,7 @@ model Song {
 
 npm run prod:backup
 npx prisma migrate dev --name add_artist_name_column
-npm run dev:migrate  # Test on dev
+# Review migration locally  # Test on dev
 npx prisma migrate deploy  # Apply to prod
 ```
 
@@ -123,15 +108,7 @@ cat > scripts/migrate-artist-data.sql << 'EOF'
 UPDATE "Song" SET artist_name = artist WHERE artist_name IS NULL;
 EOF
 
-# Apply to dev first
-npm run dev:db:start
-docker-compose exec -T postgres psql -U devuser -d music_classifier_dev \
-  < scripts/migrate-artist-data.sql
-
-# Verify on dev
-npm run dev:studio
-
-# Apply to production
+# Apply to production (after reviewing SQL)
 cat scripts/migrate-artist-data.sql | psql "$POSTGRES_URL_NON_POOLING"
 ```
 
@@ -145,7 +122,7 @@ model Song {
 
 npm run prod:backup
 npx prisma migrate dev --name remove_old_artist_column
-npm run dev:migrate
+# Review migration locally
 npx prisma migrate deploy
 ```
 
@@ -339,24 +316,24 @@ cd client && npm run dev
 - Avoid bulk operations during development
 - Use `--dry-run` flags when available
 
-### Schema Changes (Use Dev DB First)
+### Schema Changes
 
 ```bash
-# 1. Start dev database
-npm run dev:db:start
-
-# 2. Make schema changes
+# 1. Make schema changes
 # Edit prisma/schema.prisma
 
-# 3. Test migration on dev
-npm run dev:migrate
+# 2. Create migration (review only)
+npx prisma migrate dev --name my_change --create-only
 
-# 4. Verify in Prisma Studio (dev DB)
-npm run dev:studio
+# 3. Review the generated SQL
+cat prisma/migrations/*/migration.sql
 
-# 5. Apply to production when ready
+# 4. Backup and apply to production
 npm run prod:backup
 npx prisma migrate deploy
+
+# 5. Verify in Prisma Studio
+npx prisma studio
 ```
 
 ## Backup Retention Strategy
@@ -380,7 +357,7 @@ mv backups/prod_backup_202501*.sql.gz backups/archive/2025-01/
 
 1. ✅ **Backup production** (`npm run prod:backup`)
 2. ✅ **Create migration** (`npx prisma migrate dev --name ...`)
-3. ✅ **Test on dev database** (`npm run dev:migrate`)
+3. ✅ **Test locally in SQL** (`# Review migration locally`)
 4. ✅ **Review generated SQL** (`prisma/migrations/`)
 5. ✅ **Apply to production** (`npx prisma migrate deploy`)
 6. ✅ **Verify application** (test UI, check logs)
@@ -403,6 +380,6 @@ mv backups/prod_backup_202501*.sql.gz backups/archive/2025-01/
 
 **Always remember:**
 - Production backups are your safety net
-- Test migrations on dev database first
+- Test migrations locally in SQL first
 - Use additive changes when possible
 - Plan rollback before executing
