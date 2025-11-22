@@ -98,6 +98,58 @@ npm run prisma:migrate    # Create migration (dev)
 npm run create-schema     # Apply migrations (prod)
 ```
 
+### Local Development Database
+
+**Setup (first time only):**
+```bash
+# 1. Ensure Docker Desktop is running
+# 2. Create .env.local with dev database connection:
+#    POSTGRES_URL_NON_POOLING="postgresql://devuser:devpassword@localhost:5432/music_classifier_dev"
+#    POSTGRES_PRISMA_URL="postgresql://devuser:devpassword@localhost:5432/music_classifier_dev"
+#    (Copy other env vars from .env)
+
+# 3. Run automated setup
+npm run dev:setup
+```
+
+**Daily workflow:**
+```bash
+npm run dev:db:start      # Start PostgreSQL container
+vercel dev --listen 3001  # Backend (auto-uses .env.local)
+cd client && npm run dev  # Frontend
+
+# View/manage database
+npm run dev:studio        # Prisma Studio GUI
+npm run dev:db:logs       # View database logs
+
+# Stop when done
+npm run dev:db:stop
+```
+
+**Database operations:**
+```bash
+npm run dev:migrate       # Create/apply migration on dev DB
+npm run dev:seed          # Seed with test CSV (50 songs)
+npm run dev:clone-prod    # Clone production data to dev
+npm run dev:db:reset      # Nuclear option: destroy and recreate
+npm run prod:backup       # Backup production database
+```
+
+**Migration workflow:**
+```bash
+# 1. Test on dev first
+npm run dev:migrate       # Creates migration, applies to dev
+
+# 2. Verify in Prisma Studio
+npm run dev:studio
+
+# 3. Backup production
+npm run prod:backup
+
+# 4. Deploy to production
+npm run create-schema     # Applies migrations to prod
+```
+
 ### Development
 
 ```bash

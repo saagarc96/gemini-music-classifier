@@ -10,9 +10,15 @@ logs/
 # Environment
 .env
 .env.local
+.env.production
 
 # API Keys
 config/secrets.json
+
+# Database backups
+backups/*.sql
+# Keep backups directory
+!backups/.gitkeep
 
 # Progress tracking
 playlists/processed/
