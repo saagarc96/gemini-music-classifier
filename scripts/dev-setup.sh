@@ -38,7 +38,7 @@ timeout 30s bash -c 'until docker-compose ps | grep -q "healthy"; do sleep 1; do
 
 # 6. Run migrations
 echo "🔄 Running migrations..."
-npx dotenv -e .env.local -- npx prisma migrate dev --name initial
+npx dotenv -e .env.local --override -- npx prisma migrate dev --name initial --skip-seed
 
 # 7. Seed with test data (optional - will fail gracefully if CSV doesn't exist)
 echo "🌱 Seeding test data..."

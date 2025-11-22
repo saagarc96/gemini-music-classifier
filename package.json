@@ -11,9 +11,9 @@
     "dev:db:stop": "docker-compose down",
     "dev:db:reset": "docker-compose down -v && npm run dev:db:start && npm run dev:migrate",
     "dev:db:logs": "docker-compose logs -f postgres",
-    "dev:migrate": "dotenv -e .env.local -- npx prisma migrate dev",
-    "dev:studio": "dotenv -e .env.local -- npx prisma studio",
-    "dev:seed": "dotenv -e .env.local -- npm run enrich:playlist test-data/test-spotify-csv/sample-50-songs.csv --force-duplicates",
+    "dev:migrate": "dotenv -e .env.local --override -- npx prisma migrate dev",
+    "dev:studio": "dotenv -e .env.local --override -- npx prisma studio",
+    "dev:seed": "dotenv -e .env.local --override -- npm run enrich:playlist test-data/test-spotify-csv/sample-50-songs.csv --force-duplicates",
     "dev:clone-prod": "bash scripts/clone-production-to-dev.sh",
     "prod:backup": "bash scripts/backup-production.sh",
     "prisma:generate": "prisma generate",
@@ -69,6 +69,7 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0"
+    "@types/node": "^20.10.0",
+    "dotenv-cli": "^11.0.0"
   }
 }
