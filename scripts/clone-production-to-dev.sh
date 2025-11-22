@@ -14,7 +14,7 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 mkdir -p backups
 
 # Export from production
-source .env
+set -a; source .env; set +a
 pg_dump "$POSTGRES_URL_NON_POOLING" > backups/prod_backup_$TIMESTAMP.sql
 
 echo "📦 Dropping and recreating dev database..."
