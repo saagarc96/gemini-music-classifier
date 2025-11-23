@@ -90,8 +90,14 @@ async function fetchSpotifyMetadata(songs) {
 /**
  * Process a single song
  */
-async function processSong(song, spotifyMetadata, batchName = null, batchId = null) {
+async function processSong(song, spotifyMetadata, batchName = null, batchId = null, playlistId = null) {
   try {
+    // Check if song exists before processing
+    const existingBeforeProcessing = await prisma.song.findUnique({
+      where: { isrc: song.isrc }
+    });
+    const wasNew = !existingBeforeProcessing;
+
     // Get Spotify metadata
     const spotifyTrack = spotifyMetadata.get(song.spotifyTrackId);
 
@@ -153,6 +159,17 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
       create: songData,
     });
 
+    // Create playlist association if playlistId provided
+    if (playlistId) {
+      await prisma.playlistSong.create({
+        data: {
+          playlistId: playlistId,
+          songIsrc: song.isrc,
+          wasNew: wasNew
+        }
+      });
+    }
+
     return {
       success: true,
       isrc: song.isrc,
@@ -161,6 +178,7 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
       hasPreview: !!spotifyTrack?.previewUrl,
       bpmTransformation: bpmResult.transformations.join(', '),
       aiStatus: geminiResult.status,
+      wasNew: wasNew,
     };
 
   } catch (error) {
@@ -171,6 +189,7 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
       title: song.title,
       artist: song.artist,
       error: error.message,
+      wasNew: false,
     };
   }
 }
@@ -178,7 +197,7 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
 /**
  * Process songs with concurrency control
  */
-async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency, playlistName = null, batchId = null) {
+async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency, playlistName = null, batchId = null, playlistId = null) {
   const results = [];
 
   for (let i = 0; i < songs.length; i += concurrency) {
@@ -189,7 +208,7 @@ async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency, 
     console.log(`\nProcessing batch ${batchNumber}/${totalBatches} (songs ${i + 1}-${Math.min(i + concurrency, songs.length)})...`);
 
     const batchResults = await Promise.all(
-      batch.map(song => processSong(song, spotifyMetadata, playlistName, batchId))
+      batch.map(song => processSong(song, spotifyMetadata, playlistName, batchId, playlistId))
     );
 
     results.push(...batchResults);
@@ -258,12 +277,18 @@ function printSummary(results) {
  */
 async function main() {
   try {
-    // Get CSV file path from command line
-    const csvPath = process.argv[2];
+    // Parse command line arguments
+    const args = process.argv.slice(2);
+    const csvPath = args.find(arg => !arg.startsWith('--'));
+
+    // Parse options
+    const options = {
+      uploadedByName: args.find(a => a.startsWith('--uploaded-by-name='))?.split('=')[1]
+    };
 
     if (!csvPath) {
       console.error('Error: Please provide a CSV file path');
-      console.error('Usage: node scripts/enrich-spotify-playlist.cjs "path/to/spotify-export.csv"');
+      console.error('Usage: node scripts/enrich-spotify-playlist.cjs "path/to/spotify-export.csv" [--uploaded-by-name=name]');
       process.exit(1);
     }
 
@@ -282,6 +307,7 @@ async function main() {
     console.log(`Input file: ${csvPath}`);
     console.log(`Playlist name: ${playlistName}`);
     console.log(`Batch ID: ${batchId}`);
+    console.log(`Uploaded by: ${options.uploadedByName || 'Unknown'}`);
     console.log(`Concurrency: ${CONCURRENCY} songs at a time`);
     console.log('='.repeat(60));
 
@@ -302,12 +328,42 @@ async function main() {
       });
     }
 
+    // Create playlist record
+    console.log('\nCreating playlist record...');
+    const playlist = await prisma.playlist.create({
+      data: {
+        name: playlistName,
+        uploadBatchId: batchId,
+        uploadedByName: options.uploadedByName || null,
+        sourceFile: path.basename(csvPath),
+        totalSongs: 0,
+        newSongs: 0,
+        duplicateSongs: 0
+      }
+    });
+    console.log(`✓ Created playlist: ${playlist.id}`);
+
     // Fetch Spotify metadata
     const spotifyMetadata = await fetchSpotifyMetadata(songs);
 
     // Process songs
     console.log('\nStarting AI enrichment...\n');
-    const results = await processSongsWithConcurrency(songs, spotifyMetadata, CONCURRENCY, playlistName, batchId);
+    const results = await processSongsWithConcurrency(songs, spotifyMetadata, CONCURRENCY, playlistName, batchId, playlist.id);
+
+    // Update playlist stats
+    const newSongsCount = results.filter(r => r.wasNew === true).length;
+    const duplicateSongsCount = results.filter(r => r.wasNew === false).length;
+
+    await prisma.playlist.update({
+      where: { id: playlist.id },
+      data: {
+        totalSongs: results.length,
+        newSongs: newSongsCount,
+        duplicateSongs: duplicateSongsCount
+      }
+    });
+
+    console.log(`\n✓ Updated playlist stats: ${newSongsCount} new, ${duplicateSongsCount} existing`);
 
     // Export results
     const outputFilename = `spotify-enrichment-${Date.now()}.csv`;
@@ -327,6 +383,7 @@ async function main() {
     console.log(`  1. Review songs in the web interface: http://localhost:3000`);
     console.log(`  2. Filter by "Review Status: Unreviewed Only" to see new imports`);
     console.log(`  3. Curators can play 30-second Spotify previews for songs with preview URLs`);
+    console.log(`  4. Use the playlist filter to view only songs from "${playlistName}"`);
 
   } catch (error) {
     console.error('\nFatal error:', error);

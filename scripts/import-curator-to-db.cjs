@@ -24,18 +24,24 @@ const prisma = new PrismaClient();
 
 // Parse command line arguments
 const args = process.argv.slice(2);
-const enrichedCsvPath = args[0];
+const enrichedCsvPath = args.find(arg => !arg.startsWith('--'));
 
 if (!enrichedCsvPath) {
   console.error('Usage: node scripts/import-curator-to-db.cjs <enriched-csv> [options]');
   console.error('Options:');
-  console.error('  --audio-source=PATH  Path to _updated.csv file with artwork and source_file');
-  console.error('  --dry-run            Show what would be imported without writing to DB');
+  console.error('  --audio-source=PATH      Path to _updated.csv file with artwork and source_file');
+  console.error('  --uploaded-by-name=NAME  Name of person uploading');
+  console.error('  --playlist-name=NAME     Custom playlist name (defaults to filename)');
+  console.error('  --dry-run                Show what would be imported without writing to DB');
   process.exit(1);
 }
 
+const path = require('path');
+
 const options = {
   audioSourcePath: args.find(a => a.startsWith('--audio-source='))?.split('=')[1],
+  uploadedByName: args.find(a => a.startsWith('--uploaded-by-name='))?.split('=')[1],
+  playlistName: args.find(a => a.startsWith('--playlist-name='))?.split('=')[1],
   dryRun: args.includes('--dry-run')
 };
 
@@ -44,6 +50,8 @@ console.log('Curator CSV Database Import');
 console.log('='.repeat(60));
 console.log(`Enriched CSV: ${enrichedCsvPath}`);
 console.log(`Audio Source: ${options.audioSourcePath || 'Not provided'}`);
+console.log(`Playlist Name: ${options.playlistName || path.basename(enrichedCsvPath, '.csv')}`);
+console.log(`Uploaded By: ${options.uploadedByName || 'Unknown'}`);
 console.log(`Dry Run: ${options.dryRun}`);
 console.log('='.repeat(60));
 console.log('');
@@ -159,18 +167,40 @@ function normalizeExplicit(value) {
  */
 async function importToDatabase() {
   try {
+    // Generate batch ID and playlist name
+    const playlistName = options.playlistName || path.basename(enrichedCsvPath, '.csv');
+    const batchId = `curator-${playlistName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
+
     // 1. Load audio source map (if provided)
     let audioMap = null;
     if (options.audioSourcePath) {
-      console.log('[1/4] Loading audio source metadata...');
+      console.log('[1/5] Loading audio source metadata...');
       audioMap = await loadAudioSourceMap(options.audioSourcePath);
       console.log('');
     } else {
-      console.log('[1/4] No audio source provided, skipping artwork/audio links\n');
+      console.log('[1/5] No audio source provided, skipping artwork/audio links\n');
     }
 
-    // 2. Load enriched CSV
-    console.log('[2/4] Loading enriched CSV...');
+    // 2. Create playlist record (if not dry run)
+    let playlist = null;
+    if (!options.dryRun) {
+      console.log('[2/5] Creating playlist record...');
+      playlist = await prisma.playlist.create({
+        data: {
+          name: playlistName,
+          uploadBatchId: batchId,
+          uploadedByName: options.uploadedByName || null,
+          sourceFile: path.basename(enrichedCsvPath),
+          totalSongs: 0,
+          newSongs: 0,
+          duplicateSongs: 0
+        }
+      });
+      console.log(`  ✓ Created playlist: ${playlist.id}\n`);
+    }
+
+    // 3. Load enriched CSV
+    console.log('[3/5] Loading enriched CSV...');
     const songs = await new Promise((resolve, reject) => {
       const results = [];
 
@@ -208,6 +238,10 @@ async function importToDatabase() {
             aiSubgenre2: musicalSubgenres[1] || null,
             aiSubgenre3: musicalSubgenres[2] || null,
 
+            // Batch tracking
+            uploadBatchId: batchId,
+            uploadBatchName: playlistName,
+
             // Mark as reviewed by curator
             reviewed: true,
             reviewedBy: 'curator',
@@ -220,8 +254,8 @@ async function importToDatabase() {
 
     console.log(`  ✓ Loaded ${songs.length} songs\n`);
 
-    // 3. Show preview/stats
-    console.log('[3/4] Import preview:');
+    // 4. Show preview/stats
+    console.log('[4/5] Import preview:');
     const withAudio = songs.filter(s => s.sourceFile).length;
     const withArtwork = songs.filter(s => s.artwork).length;
     const withISRC = songs.filter(s => s.isrc).length;
@@ -249,8 +283,8 @@ async function importToDatabase() {
       return;
     }
 
-    // 4. Import to database
-    console.log('[4/4] Importing to database...');
+    // 5. Import to database
+    console.log('[5/5] Importing to database...');
     let imported = 0;
     let updated = 0;
     let skipped = 0;
@@ -263,6 +297,12 @@ async function importToDatabase() {
       }
 
       try {
+        // Check if song existed before
+        const existingBefore = await prisma.song.findUnique({
+          where: { isrc: song.isrc }
+        });
+        const wasNew = !existingBefore;
+
         const result = await prisma.song.upsert({
           where: { isrc: song.isrc },
           update: {
@@ -280,12 +320,25 @@ async function importToDatabase() {
             aiSubgenre1: song.aiSubgenre1,
             aiSubgenre2: song.aiSubgenre2,
             aiSubgenre3: song.aiSubgenre3,
+            uploadBatchId: song.uploadBatchId,
+            uploadBatchName: song.uploadBatchName,
             reviewed: song.reviewed,
             reviewedBy: song.reviewedBy,
             reviewedAt: song.reviewedAt
           },
           create: song
         });
+
+        // Create playlist association
+        if (playlist) {
+          await prisma.playlistSong.create({
+            data: {
+              playlistId: playlist.id,
+              songIsrc: song.isrc,
+              wasNew: wasNew
+            }
+          });
+        }
 
         if (result.id) {
           const action = result.createdAt.getTime() === result.modifiedAt.getTime() ? 'created' : 'updated';
@@ -296,6 +349,27 @@ async function importToDatabase() {
         console.error(`  Error importing ${song.artist} - ${song.title}:`, error.message);
         skipped++;
       }
+    }
+
+    // Update playlist stats
+    if (playlist) {
+      const playlistSongs = await prisma.playlistSong.findMany({
+        where: { playlistId: playlist.id }
+      });
+
+      const newSongsCount = playlistSongs.filter(ps => ps.wasNew).length;
+      const duplicateSongsCount = playlistSongs.filter(ps => !ps.wasNew).length;
+
+      await prisma.playlist.update({
+        where: { id: playlist.id },
+        data: {
+          totalSongs: playlistSongs.length,
+          newSongs: newSongsCount,
+          duplicateSongs: duplicateSongsCount
+        }
+      });
+
+      console.log(`  ✓ Updated playlist stats: ${newSongsCount} new, ${duplicateSongsCount} existing\n`);
     }
 
     console.log(`  ✓ Complete\n`);
