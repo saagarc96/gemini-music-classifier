@@ -469,26 +469,44 @@ npx prisma migrate dev --name add-playlists
 ## Implementation Progress (V1 - Streamlined Scope)
 
 ### ✅ Completed (Session 2025-11-23)
+
+**Phase 1: Database Schema**
 - [x] **Database Schema** - Added Playlist and PlaylistSong tables with indexes
 - [x] **Database Migration** - Ran `npx prisma db push` successfully
 - [x] **Backup Script** - Created `scripts/backup-db.cjs` for JSON exports
 - [x] **Database Backup** - 19MB backup at `backups/db_backup_2025-11-23T20-42-34.json`
+
+**Phase 2: Script Updates**
 - [x] **enrich-playlist.cjs** - Updated with full playlist tracking:
   - Creates Playlist record at start
   - Tracks wasNew flag for each song
   - Creates PlaylistSong associations
   - Updates playlist stats (totalSongs, newSongs, duplicateSongs)
   - Added `--uploaded-by-name` CLI flag
+- [x] **enrich-spotify-playlist.cjs** - Added same playlist tracking logic
+- [x] **import-curator-to-db.cjs** - Added same playlist tracking logic
+
+**Phase 3: API Endpoints**
+- [x] **GET /api/playlists** - Created endpoint to list all playlists
+
+**Testing Results (2025-11-23)**
+- ✅ Uploaded "DTF (Non-English Asian)" playlist (20 songs)
+- ✅ Playlist record created successfully
+- ✅ PlaylistSong associations working correctly
+- ✅ wasNew flag accurately tracking new vs existing songs
+- ✅ AI enrichment working for all songs
+- ✅ Batch metadata preserved (uploadBatchId, uploadBatchName)
+- ✅ All database relations functioning properly
 
 ### 🚧 In Progress
-- [ ] **enrich-spotify-playlist.cjs** - Add same playlist tracking logic
-- [ ] **import-curator-to-db.cjs** - Add same playlist tracking logic
-- [ ] **GET /api/playlists** - Endpoint to list playlists for dropdown
 - [ ] **GET /api/songs** - Add playlistId filter parameter
 - [ ] **Frontend API Client** - Add Playlist types and getPlaylists()
 - [ ] **FilterPanel Component** - Add playlist dropdown (8th filter)
 - [ ] **SongsPage** - Add playlist filter state and badge display
+
+### 📋 Pending
 - [ ] **End-to-End Testing** - Test full upload → filter → export flow
+- [ ] **Fix uploadedByName parsing** - CLI flag not being set correctly
 
 ### 📝 Notes
 - **Streamlined V1 Scope**: No separate playlist pages, just filter on main songs page
