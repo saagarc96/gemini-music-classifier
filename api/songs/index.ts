@@ -11,6 +11,7 @@
  *   - reviewStatus: Filter by reviewed (all, reviewed, unreviewed)
  *   - energy: Filter by aiEnergy
  *   - accessibility: Filter by aiAccessibility
+ *   - playlistId: Filter by playlist ID
  *   - search: Search by artist, title, or ISRC (case-insensitive partial match)
  *   - sortBy: Field to sort by (createdAt, title, artist, etc.) (default: createdAt)
  *   - sortOrder: Sort direction (asc, desc) (default: desc)
@@ -53,6 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const accessibility = req.query.accessibility as string;
     const explicit = req.query.explicit as string;
     const uploadBatchId = req.query.uploadBatchId as string;
+    const playlistId = req.query.playlistId as string;
     const search = req.query.search as string;
     const sortBy = (req.query.sortBy as string) || 'createdAt';
     const sortOrder = (req.query.sortOrder as string) || 'desc';
@@ -120,6 +122,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Upload batch filter
     if (uploadBatchId && uploadBatchId !== 'all') {
       where.uploadBatchId = uploadBatchId;
+    }
+
+    // Playlist filter (filter by songs that belong to a specific playlist)
+    if (playlistId && playlistId !== 'all') {
+      where.playlists = {
+        some: {
+          playlistId: playlistId
+        }
+      };
     }
 
     // Combine AND conditions if any exist

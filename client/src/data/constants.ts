@@ -4,7 +4,7 @@
  * AUTO-GENERATED from data/subgenres.json
  * DO NOT EDIT MANUALLY - Run: npm run generate:constants
  *
- * Last generated: 2025-11-18T05:50:08.199Z
+ * Last generated: 2025-11-23T21:59:14.167Z
  */
 
 export const SUBGENRES = [
@@ -111,9 +111,11 @@ export const SUBGENRES = [
   "Global Disco",
   "Global Disco House",
   "Global Electronica (Non French)",
+  "Global Funk & Soul",
   "Global Instrumentals (Organic)",
   "Global Pop (Eastern)",
   "Golden Era Hip-Hop",
+  "Hawaiian Acoustic Guitar (Instrumental)",
   "Hawaiian Easy Listening",
   "Hip Hop Instrumentals",
   "Hip-Hop Samples",
@@ -123,6 +125,7 @@ export const SUBGENRES = [
   "Indie Sleaze",
   "Indie Soft Pop",
   "Indie Soft Rock",
+  "Instrumental Electronica",
   "Irish Rock Classics",
   "Italo-Disco",
   "Japanese Jazz",
@@ -136,6 +139,7 @@ export const SUBGENRES = [
   "Latin Nu-Disco",
   "Latin-Disco",
   "Latin-Lounge",
+  "Lo-Fi Beats",
   "Lounge (Agnostic)",
   "Lounge (French)",
   "Middle Eastern Funk & Soul",
@@ -151,6 +155,7 @@ export const SUBGENRES = [
   "Mumble Rap",
   "Natural Soundscape",
   "Neo Soul",
+  "Neo-Classical",
   "Neo-Soul",
   "New Jack Swing",
   "New Wave",

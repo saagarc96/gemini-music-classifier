@@ -86,6 +86,9 @@ model Song {
   uploadBatchId   String?  @map("upload_batch_id") @db.VarChar(50)
   uploadBatchName String?  @map("upload_batch_name") @db.VarChar(255)
 
+  // Playlist tracking (many-to-many via PlaylistSong)
+  playlists PlaylistSong[]
+
   // Timestamps
   createdAt  DateTime @default(now()) @map("created_at")
   modifiedAt DateTime @default(now()) @updatedAt @map("modified_at")
@@ -104,4 +107,45 @@ model Song {
   @@index([uploadBatchId], map: "idx_upload_batch_id")
   @@index([uploadBatchName], map: "idx_upload_batch_name")
   @@map("songs")
+}
+
+// Playlist tracking for uploaded CSV batches
+model Playlist {
+  id              String   @id @default(cuid())
+  name            String   @db.VarChar(255)
+  uploadBatchId   String   @map("upload_batch_id") @db.VarChar(50)
+  uploadedByName  String?  @map("uploaded_by_name") @db.VarChar(255)
+  uploadedAt      DateTime @default(now()) @map("uploaded_at")
+  sourceFile      String?  @map("source_file") @db.VarChar(255)
+
+  // Stats (updated after upload completes)
+  totalSongs      Int      @default(0) @map("total_songs")
+  newSongs        Int      @default(0) @map("new_songs")
+  duplicateSongs  Int      @default(0) @map("duplicate_songs")
+
+  // Relations
+  songs           PlaylistSong[]
+
+  @@index([uploadBatchId], map: "idx_playlist_batch_id")
+  @@index([uploadedByName], map: "idx_playlist_uploader")
+  @@index([uploadedAt], map: "idx_playlist_uploaded_at")
+  @@map("playlists")
+}
+
+// Junction table for many-to-many relationship between Playlist and Song
+model PlaylistSong {
+  id         String   @id @default(cuid())
+  playlistId String   @map("playlist_id")
+  songIsrc   String   @map("song_isrc") @db.VarChar(12)
+  addedAt    DateTime @default(now()) @map("added_at")
+  wasNew     Boolean  @default(false) @map("was_new")
+
+  // Relations
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  song       Song     @relation(fields: [songIsrc], references: [isrc], onDelete: Cascade)
+
+  @@unique([playlistId, songIsrc])
+  @@index([playlistId], map: "idx_playlist_song_playlist")
+  @@index([songIsrc], map: "idx_playlist_song_isrc")
+  @@map("playlist_songs")
 }
