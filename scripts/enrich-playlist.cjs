@@ -46,6 +46,7 @@ if (!csvPath) {
   console.error('  --force-duplicates   Skip duplicate detection (import all songs)');
   console.error('  --dry-run            Preview duplicates without processing');
   console.error('  --batch-name=NAME    Custom batch name for uploadBatchId');
+  console.error('  --uploaded-by-name=NAME  Name of person uploading (for playlist tracking)');
   process.exit(1);
 }
 
@@ -57,7 +58,8 @@ const options = {
   forceDuplicates: args.includes('--force-duplicates'),
   dryRun: args.includes('--dry-run'),
   concurrency: parseInt(args.find(a => a.startsWith('--concurrency='))?.split('=')[1] || '5'),
-  batchName: args.find(a => a.startsWith('--batch-name='))?.split('=')[1]
+  batchName: args.find(a => a.startsWith('--batch-name='))?.split('=')[1],
+  uploadedByName: args.find(a => a.startsWith('--uploaded-by-name='))?.split('=')[1]
 };
 
 console.log('='.repeat(60));
@@ -105,6 +107,25 @@ async function enrichPlaylist() {
     const songs = await loadCSV(csvPath);
     console.log(`  ✓ Loaded ${songs.length} songs\n`);
 
+    // 1.2. Create playlist record
+    console.log('[1.2/5] Creating playlist record...');
+    const playlist = await prisma.playlist.create({
+      data: {
+        name: batchName,
+        uploadBatchId: uploadBatchId,
+        uploadedByName: options.uploadedByName || null,
+        sourceFile: path.basename(csvPath),
+        totalSongs: 0,
+        newSongs: 0,
+        duplicateSongs: 0
+      }
+    });
+    console.log(`  ✓ Playlist created: ${playlist.id}`);
+    if (options.uploadedByName) {
+      console.log(`  Uploaded by: ${options.uploadedByName}`);
+    }
+    console.log('');
+
     // 1.5. Detect duplicates (unless --force-duplicates is set)
     let songsToProcess = songs;
     let duplicateDecisions = {};
@@ -150,7 +171,7 @@ async function enrichPlaylist() {
 
       // Process batch in parallel
       const batchResults = await Promise.all(
-        batch.map(song => enrichSong(song, options, duplicateDecisions[song.isrc], uploadBatchId))
+        batch.map(song => enrichSong(song, options, duplicateDecisions[song.isrc], uploadBatchId, playlist.id))
       );
 
       results.push(...batchResults);
@@ -163,6 +184,21 @@ async function enrichPlaylist() {
     console.log('[3/5] Saving to database...');
     const saved = results.filter(r => r.status === 'success').length;
     console.log(`  ✓ Saved ${saved} songs to database\n`);
+
+    // 3.5. Update playlist stats
+    console.log('[3.5/5] Updating playlist stats...');
+    const newSongsCount = results.filter(r => r.wasNew === true).length;
+    const duplicateSongsCount = results.filter(r => r.wasNew === false).length;
+    await prisma.playlist.update({
+      where: { id: playlist.id },
+      data: {
+        totalSongs: results.length,
+        newSongs: newSongsCount,
+        duplicateSongs: duplicateSongsCount
+      }
+    });
+    console.log(`  ✓ Playlist stats updated`);
+    console.log(`    Total: ${results.length}, New: ${newSongsCount}, Duplicates: ${duplicateSongsCount}\n`);
 
     // 4. Export enriched CSV
     console.log('[4/5] Exporting enriched CSV...');
@@ -222,18 +258,30 @@ async function enrichPlaylist() {
 /**
  * Enriches a single song
  */
-async function enrichSong(song, options, duplicateDecision, uploadBatchId) {
+async function enrichSong(song, options, duplicateDecision, uploadBatchId, playlistId) {
   const logPrefix = `    ${song.artist} - ${song.title}`;
 
   try {
+    // Track if this song already exists (for wasNew flag)
+    const existingBeforeProcessing = await prisma.song.findUnique({
+      where: { isrc: song.isrc }
+    });
+    const wasNew = !existingBeforeProcessing;
+
     // Check if already processed
     if (options.skipExisting && !options.force && !duplicateDecision) {
-      const existing = await prisma.song.findUnique({
-        where: { isrc: song.isrc }
-      });
-
-      if (existing && existing.aiStatus === 'SUCCESS' && isRecent(existing.modifiedAt)) {
+      if (existingBeforeProcessing && existingBeforeProcessing.aiStatus === 'SUCCESS' && isRecent(existingBeforeProcessing.modifiedAt)) {
         console.log(`${logPrefix} → Skipped (already processed)`);
+
+        // Still create playlist association even if skipped
+        await prisma.playlistSong.create({
+          data: {
+            playlistId: playlistId,
+            songIsrc: song.isrc,
+            wasNew: false
+          }
+        });
+
         return { ...song, status: 'skipped' };
       }
     }
@@ -318,10 +366,20 @@ async function enrichSong(song, options, duplicateDecision, uploadBatchId) {
       console.log(`${logPrefix} → ✓ Success`);
     }
 
+    // Create playlist association
+    await prisma.playlistSong.create({
+      data: {
+        playlistId: playlistId,
+        songIsrc: song.isrc,
+        wasNew: wasNew
+      }
+    });
+
     return {
       ...song,
       ...enrichedSong,
-      status: 'success'
+      status: 'success',
+      wasNew: wasNew
     };
 
   } catch (error) {
