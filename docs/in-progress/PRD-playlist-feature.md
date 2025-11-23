@@ -476,37 +476,74 @@ npx prisma migrate dev --name add-playlists
 - [x] **Backup Script** - Created `scripts/backup-db.cjs` for JSON exports
 - [x] **Database Backup** - 19MB backup at `backups/db_backup_2025-11-23T20-42-34.json`
 
-**Phase 2: Script Updates**
+**Phase 2: Script Updates (All 3 scripts)**
 - [x] **enrich-playlist.cjs** - Updated with full playlist tracking:
-  - Creates Playlist record at start
-  - Tracks wasNew flag for each song
-  - Creates PlaylistSong associations
-  - Updates playlist stats (totalSongs, newSongs, duplicateSongs)
-  - Added `--uploaded-by-name` CLI flag
-- [x] **enrich-spotify-playlist.cjs** - Added same playlist tracking logic
-- [x] **import-curator-to-db.cjs** - Added same playlist tracking logic
+  - Creates Playlist record at start (line 110-127)
+  - Tracks wasNew flag for each song (line 250-254)
+  - Creates PlaylistSong associations (line 354-361)
+  - Updates playlist stats at end (line 188-201)
+  - Added `--uploaded-by-name` CLI flag (line 61)
+- [x] **enrich-spotify-playlist.cjs** - Added same playlist tracking logic:
+  - Playlist creation (line 333-344)
+  - wasNew tracking (line 96-99)
+  - PlaylistSong associations (line 164-170)
+  - Stats update (line 354-365)
+- [x] **import-curator-to-db.cjs** - Added same playlist tracking logic:
+  - Playlist creation (line 187-199)
+  - wasNew tracking (line 301-304)
+  - PlaylistSong associations (line 334-340)
+  - Stats update (line 356-372)
 
-**Phase 3: API Endpoints**
-- [x] **GET /api/playlists** - Created endpoint to list all playlists
+**Phase 3: API Endpoints (Backend Complete)**
+- [x] **GET /api/playlists** - Returns all playlists sorted by upload date
+  - File: `api/playlists/index.ts`
+  - Returns: id, name, uploadedAt, uploadedByName, totalSongs, newSongs, duplicateSongs
+- [x] **GET /api/songs** - Added playlistId filter parameter
+  - File: `api/songs/index.ts` (line 57, 128-134)
+  - Uses Prisma relation filtering: `where.playlists.some({ playlistId })`
+  - Filters songs by PlaylistSong junction table
 
 **Testing Results (2025-11-23)**
 - ✅ Uploaded "DTF (Non-English Asian)" playlist (20 songs)
-- ✅ Playlist record created successfully
-- ✅ PlaylistSong associations working correctly
-- ✅ wasNew flag accurately tracking new vs existing songs
-- ✅ AI enrichment working for all songs
-- ✅ Batch metadata preserved (uploadBatchId, uploadBatchName)
-- ✅ All database relations functioning properly
+- ✅ Playlist record created: `cmic758q20000un8l22xffb7n`
+- ✅ PlaylistSong associations: 10+ created successfully
+- ✅ wasNew flag: Accurately tracking new vs existing songs (all marked `true`)
+- ✅ AI enrichment: All songs classified (Energy, Subgenres, Accessibility)
+- ✅ Batch metadata: uploadBatchId and uploadBatchName preserved
+- ✅ Database relations: All Prisma relations working correctly
+- ✅ Song data verified: Artist, title, ISRC, AI classifications all saved
 
-### 🚧 In Progress
-- [ ] **GET /api/songs** - Add playlistId filter parameter
-- [ ] **Frontend API Client** - Add Playlist types and getPlaylists()
-- [ ] **FilterPanel Component** - Add playlist dropdown (8th filter)
-- [ ] **SongsPage** - Add playlist filter state and badge display
+**Commits**
+- `ed70830` - feat(playlists): add database schema and enrich-playlist script integration
+- `d9aeff1` - feat(playlists): add playlist tracking to Spotify and curator import scripts
+- `9cf6dc3` - feat(playlists): add API endpoints for playlist filtering
 
-### 📋 Pending
-- [ ] **End-to-End Testing** - Test full upload → filter → export flow
-- [ ] **Fix uploadedByName parsing** - CLI flag not being set correctly
+### 📋 Remaining Work (Frontend - Phase 4)
+
+**Files to Update:**
+1. **`client/src/lib/api.ts`**
+   - Add Playlist interface type
+   - Add `getPlaylists()` function to API client
+
+2. **`client/src/components/FilterPanel.tsx`**
+   - Add playlist dropdown (8th filter after batch filter)
+   - Fetch playlists using `getPlaylists()`
+   - Add onChange handler to update playlistId filter
+
+3. **`client/src/pages/SongsPage.tsx`**
+   - Add playlistId to filter state
+   - Pass playlistId to fetchSongs API call
+   - Add playlist filter badge display (like existing filter badges)
+   - Clear playlist filter when clicking badge X
+
+### 📝 Next Steps
+1. Frontend integration (Phase 4) - 3 file updates
+2. End-to-end testing with real data
+3. Test upload → filter by playlist → export workflow
+4. Verify backward compatibility with existing batch filtering
+
+### 🐛 Known Issues
+- [ ] **uploadedByName not being set** - CLI flag `--uploaded-by-name` parsed but value shows as "Unknown" in database (needs debugging)
 
 ### 📝 Notes
 - **Streamlined V1 Scope**: No separate playlist pages, just filter on main songs page
