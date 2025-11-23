@@ -299,7 +299,12 @@ async function main() {
 
     // Extract playlist name from filename and generate batch ID
     const playlistName = path.basename(csvPath, '.csv');
-    const batchId = `spotify-${playlistName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
+    const sanitizedName = playlistName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const timestamp = Date.now().toString();
+    // Ensure batch ID fits in VARCHAR(50): "spotify-" (8) + sanitized name + "-" (1) + timestamp (13) = max 50
+    const maxNameLength = 50 - 8 - 1 - timestamp.length;
+    const truncatedName = sanitizedName.substring(0, maxNameLength);
+    const batchId = `spotify-${truncatedName}-${timestamp}`;
 
     console.log('='.repeat(60));
     console.log('SPOTIFY PLAYLIST ENRICHMENT');
