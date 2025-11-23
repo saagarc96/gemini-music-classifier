@@ -132,7 +132,7 @@ async function enrichPlaylist() {
 
     if (!options.forceDuplicates && !options.dryRun) {
       console.log('[1.5/5] Checking for duplicates...');
-      const duplicateCheck = await detectAndResolveDuplicates(songs, options);
+      const duplicateCheck = await detectAndResolveDuplicates(songs, options, playlist.id);
       songsToProcess = duplicateCheck.songsToProcess;
       duplicateDecisions = duplicateCheck.decisions;
       console.log(`  ✓ ${songsToProcess.length} songs to process after duplicate resolution\n`);
@@ -520,7 +520,7 @@ function isRecent(date) {
 /**
  * Detects duplicates and prompts for resolution
  */
-async function detectAndResolveDuplicates(songs, options) {
+async function detectAndResolveDuplicates(songs, options, playlistId) {
   const songsToProcess = [];
   const decisions = {};
   let autoSkippedISRC = 0;
@@ -561,6 +561,16 @@ async function detectAndResolveDuplicates(songs, options) {
     if (duplicate.similarity === 100) {
       console.log(`  ✓ Auto-skipped: ${song.artist} - ${song.title} (100% exact match)`);
       autoSkippedISRC++;
+
+      // Still create playlist association for auto-skipped duplicates
+      await prisma.playlistSong.create({
+        data: {
+          playlistId: playlistId,
+          songIsrc: song.isrc,
+          wasNew: false
+        }
+      });
+
       continue; // Don't add to songsToProcess, don't prompt
     }
 
