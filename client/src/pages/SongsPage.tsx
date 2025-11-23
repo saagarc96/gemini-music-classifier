@@ -50,6 +50,11 @@ export default function SongsPage() {
   const [totalSongs, setTotalSongs] = useState(0);
   const [limit, setLimit] = useState(50);
 
+  // Clear selections when filters change
+  useEffect(() => {
+    setSelectedIsrcs(new Set());
+  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, selectedPlaylistId, searchQuery]);
+
   // Fetch songs when filters or page changes
   useEffect(() => {
     fetchSongs();
