@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from './ui/select';
 import { SUBGENRES, ENERGY_LEVELS, ACCESSIBILITY_TYPES, EXPLICIT_TYPES, AI_STATUSES } from '../data/constants';
-import { getUploadBatches, type UploadBatch } from '../lib/api';
+import { getUploadBatches, getPlaylists, type UploadBatch, type Playlist } from '../lib/api';
 
 interface FilterPanelProps {
   selectedSubgenre: string;
@@ -21,6 +21,7 @@ interface FilterPanelProps {
   selectedAccessibility: string;
   selectedExplicit: string;
   selectedBatchId: string;
+  selectedPlaylistId: string;
   searchQuery: string;
   onSubgenreChange: (value: string) => void;
   onStatusChange: (value: string) => void;
@@ -29,6 +30,7 @@ interface FilterPanelProps {
   onAccessibilityChange: (value: string) => void;
   onExplicitChange: (value: string) => void;
   onBatchChange: (value: string) => void;
+  onPlaylistChange: (value: string) => void;
   onSearchChange: (value: string) => void;
   onExport: () => void;
   onUpload: () => void;
@@ -43,6 +45,7 @@ export function FilterPanel({
   selectedAccessibility,
   selectedExplicit,
   selectedBatchId,
+  selectedPlaylistId,
   searchQuery,
   onSubgenreChange,
   onStatusChange,
@@ -51,12 +54,14 @@ export function FilterPanel({
   onAccessibilityChange,
   onExplicitChange,
   onBatchChange,
+  onPlaylistChange,
   onSearchChange,
   onExport,
   onUpload,
   totalCount,
 }: FilterPanelProps) {
   const [uploadBatches, setUploadBatches] = useState<UploadBatch[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
 
   // Fetch upload batches on mount
   useEffect(() => {
@@ -73,6 +78,19 @@ export function FilterPanel({
       }
     }
     fetchBatches();
+  }, []);
+
+  // Fetch playlists on mount
+  useEffect(() => {
+    async function fetchPlaylistsData() {
+      try {
+        const playlistsData = await getPlaylists();
+        setPlaylists(playlistsData);
+      } catch (error) {
+        console.error('Failed to load playlists:', error);
+      }
+    }
+    fetchPlaylistsData();
   }, []);
 
   // Format date for display
@@ -124,7 +142,7 @@ export function FilterPanel({
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
         <div className="space-y-2">
           <Label htmlFor="subgenre" className="text-zinc-300">Subgenre</Label>
           <Select value={selectedSubgenre} onValueChange={onSubgenreChange}>
@@ -277,6 +295,29 @@ export function FilterPanel({
                   className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
                 >
                   {batch.uploadBatchName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="playlist" className="text-zinc-300">Playlist</Label>
+          <Select value={selectedPlaylistId} onValueChange={onPlaylistChange}>
+            <SelectTrigger id="playlist" className="bg-zinc-950 border-zinc-700 text-zinc-100">
+              <SelectValue placeholder="All Playlists" />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-700 max-h-80">
+              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
+                All Playlists
+              </SelectItem>
+              {playlists.map((playlist) => (
+                <SelectItem
+                  key={playlist.id}
+                  value={playlist.id}
+                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
+                >
+                  {playlist.name}
                 </SelectItem>
               ))}
             </SelectContent>

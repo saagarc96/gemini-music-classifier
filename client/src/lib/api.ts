@@ -54,6 +54,16 @@ export interface UploadBatch {
   unreviewedSongs: number;
 }
 
+export interface Playlist {
+  id: string;
+  name: string;
+  uploadedAt: string;
+  uploadedByName: string | null;
+  totalSongs: number;
+  newSongs: number;
+  duplicateSongs: number;
+}
+
 export interface GetSongsParams {
   page?: number;
   limit?: number;
@@ -64,6 +74,7 @@ export interface GetSongsParams {
   accessibility?: string;
   explicit?: string;
   uploadBatchId?: string;
+  playlistId?: string;
   search?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
@@ -142,4 +153,21 @@ export async function getUploadBatches(): Promise<UploadBatch[]> {
 
   const data = await response.json();
   return data.batches;
+}
+
+/**
+ * Fetches all playlists sorted by upload date
+ */
+export async function getPlaylists(): Promise<Playlist[]> {
+  const response = await fetch('/api/playlists', {
+    credentials: 'include', // Include cookies for authentication
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to fetch playlists' }));
+    throw new Error(error.error || 'Failed to fetch playlists');
+  }
+
+  const data = await response.json();
+  return data.playlists;
 }
