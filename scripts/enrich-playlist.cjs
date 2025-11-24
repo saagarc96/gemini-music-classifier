@@ -562,9 +562,19 @@ async function detectAndResolveDuplicates(songs, options, playlistId) {
       console.log(`  ✓ Auto-skipped: ${song.artist} - ${song.title} (100% exact match)`);
       autoSkippedISRC++;
 
-      // Still create playlist association for auto-skipped duplicates
-      await prisma.playlistSong.create({
-        data: {
+      // Create or update playlist association for auto-skipped duplicates
+      // Use upsert to avoid unique constraint errors on re-runs
+      await prisma.playlistSong.upsert({
+        where: {
+          playlistId_songIsrc: {
+            playlistId: playlistId,
+            songIsrc: song.isrc
+          }
+        },
+        update: {
+          wasNew: false
+        },
+        create: {
           playlistId: playlistId,
           songIsrc: song.isrc,
           wasNew: false
