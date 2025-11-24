@@ -696,7 +696,8 @@ async function detectAndPreviewDuplicates(songs) {
  * Finds a duplicate for a given song
  */
 async function findDuplicate(song) {
-  // First check for exact ISRC match
+  // Only check for exact ISRC match
+  // ISRC is the unique identifier - different ISRCs = different songs
   if (song.isrc) {
     const exactMatch = await prisma.song.findUnique({
       where: { isrc: song.isrc }
@@ -711,37 +712,40 @@ async function findDuplicate(song) {
     }
   }
 
-  // Check for fuzzy artist+title match (70% threshold)
-  const allSongs = await prisma.song.findMany({
-    select: {
-      isrc: true,
-      artist: true,
-      title: true,
-      bpm: true,
-      reviewed: true,
-      aiEnergy: true,
-      aiAccessibility: true
-    }
-  });
+  // If song has no ISRC, check for fuzzy artist+title match (70% threshold)
+  // This handles edge cases where ISRC is missing
+  if (!song.isrc) {
+    const allSongs = await prisma.song.findMany({
+      select: {
+        isrc: true,
+        artist: true,
+        title: true,
+        bpm: true,
+        reviewed: true,
+        aiEnergy: true,
+        aiAccessibility: true
+      }
+    });
 
-  for (const existingSong of allSongs) {
-    const isDuplicate = areSongsDuplicate(
-      { artist: song.artist, title: song.title },
-      { artist: existingSong.artist, title: existingSong.title },
-      70 // 70% threshold
-    );
-
-    if (isDuplicate) {
-      const similarity = calculateSongSimilarity(
+    for (const existingSong of allSongs) {
+      const isDuplicate = areSongsDuplicate(
         { artist: song.artist, title: song.title },
-        { artist: existingSong.artist, title: existingSong.title }
+        { artist: existingSong.artist, title: existingSong.title },
+        70 // 70% threshold
       );
 
-      return {
-        song: existingSong,
-        similarity,
-        matchType: 'fuzzy'
-      };
+      if (isDuplicate) {
+        const similarity = calculateSongSimilarity(
+          { artist: song.artist, title: song.title },
+          { artist: existingSong.artist, title: existingSong.title }
+        );
+
+        return {
+          song: existingSong,
+          similarity,
+          matchType: 'fuzzy'
+        };
+      }
     }
   }
 
