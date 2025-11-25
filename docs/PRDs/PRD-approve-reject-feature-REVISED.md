@@ -445,7 +445,57 @@ if (existingSong?.approvalStatus === 'REJECTED') {
 
 ---
 
-## 8. Testing Checklist
+## 8. Implementation Status
+
+> **Last Updated:** 2025-11-25
+> **Status:** In Progress (Frontend + API Complete)
+
+### Completed
+
+| Phase | Item | Status |
+|-------|------|--------|
+| 1 | Prisma schema update (`approvalStatus`, `approvedBy`, `approvedById`, `approvedAt`) | ✅ |
+| 1 | Migration file created | ✅ |
+| 1 | GET /api/songs - approvalStatus filter | ✅ |
+| 1 | PATCH /api/songs/:isrc - approval logic (admin only) | ✅ |
+| 1 | GET /api/songs/export - filter by APPROVED only by default | ✅ |
+| 2 | Constants: `APPROVAL_STATUSES`, `APPROVAL_STATUS_LABELS` | ✅ |
+| 2 | Song interface in api.ts updated | ✅ |
+| 2 | FilterPanel - approval status dropdown | ✅ |
+| 2 | SongsPage - state management & fetch logic | ✅ |
+| 2 | Default filter to "Pending Review" | ✅ |
+| 3 | ReviewModal - Approve/Reject buttons (admin only) | ✅ |
+| 3 | ReviewModal - Single-click reject with 5s undo toast | ✅ |
+| 3 | ReviewModal - End-of-queue auto-switch to "All" | ✅ |
+| 3 | ReviewModal - Save Metadata closes modal | ✅ |
+| 4 | SongTable - Row background tinting | ✅ |
+| 4 | SongTable - Approval status in Reviewed By column | ✅ |
+
+### Pending
+
+| Phase | Item | Status |
+|-------|------|--------|
+| - | Run Prisma migration on database | ⏳ |
+| 5 | Update enrich:playlist to skip rejected songs | ⏳ |
+| 5 | Update other import scripts | ⏳ |
+
+### Files Modified
+
+- `prisma/schema.prisma` - Added approval workflow fields to Song model
+- `prisma/migrations/20251125000000_add_approval_workflow/migration.sql` - Migration file
+- `api/songs/index.ts` - Added approvalStatus filter
+- `api/songs/[isrc].ts` - Added approval_status support with admin check
+- `api/songs/export.ts` - Default to APPROVED only, added includeAll param
+- `client/src/data/constants.ts` - Added approval status constants
+- `client/src/lib/api.ts` - Updated Song interface and UpdateSongPayload
+- `client/src/components/FilterPanel.tsx` - Added approval status dropdown
+- `client/src/components/ReviewModal.tsx` - Added approve/reject buttons
+- `client/src/components/SongTable.tsx` - Added row tinting and status display
+- `client/src/pages/SongsPage.tsx` - Added state management for approval status
+
+---
+
+## 9. Testing Checklist
 
 - [ ] Admin can approve songs
 - [ ] Admin can reject songs
@@ -461,7 +511,7 @@ if (existingSong?.approvalStatus === 'REJECTED') {
 
 ---
 
-## 9. Changes from Original PRDs
+## 10. Changes from Original PRDs
 
 | Original | Revised | Reason |
 |----------|---------|--------|

@@ -29,7 +29,8 @@ export default function SongsPage() {
   // Filter states
   const [selectedSubgenre, setSelectedSubgenre] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
-  const [selectedReviewStatus, setSelectedReviewStatus] = useState('unreviewed');
+  const [selectedReviewStatus, setSelectedReviewStatus] = useState('all');
+  const [selectedApprovalStatus, setSelectedApprovalStatus] = useState('active'); // Default to "Active" (non-rejected songs)
   const [selectedEnergy, setSelectedEnergy] = useState('all');
   const [selectedAccessibility, setSelectedAccessibility] = useState('all');
   const [selectedExplicit, setSelectedExplicit] = useState('all');
@@ -53,12 +54,12 @@ export default function SongsPage() {
   // Clear selections when filters change
   useEffect(() => {
     setSelectedIsrcs(new Set());
-  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, selectedPlaylistId, searchQuery]);
+  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedApprovalStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, selectedPlaylistId, searchQuery]);
 
   // Fetch songs when filters or page changes
   useEffect(() => {
     fetchSongs();
-  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, selectedPlaylistId, searchQuery, currentPage, sortBy, sortOrder, limit]);
+  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedApprovalStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, selectedPlaylistId, searchQuery, currentPage, sortBy, sortOrder, limit]);
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -69,6 +70,7 @@ export default function SongsPage() {
         subgenre: selectedSubgenre !== 'all' ? selectedSubgenre : undefined,
         status: selectedStatus !== 'all' ? selectedStatus : undefined,
         reviewStatus: selectedReviewStatus !== 'all' ? selectedReviewStatus : undefined,
+        approvalStatus: selectedApprovalStatus !== 'all' ? selectedApprovalStatus : undefined,
         energy: selectedEnergy !== 'all' ? selectedEnergy : undefined,
         accessibility: selectedAccessibility !== 'all' ? selectedAccessibility : undefined,
         explicit: selectedExplicit !== 'all' ? selectedExplicit : undefined,
@@ -100,20 +102,32 @@ export default function SongsPage() {
     setIsModalOpen(true);
   };
 
-  const handleSave = async (songId: number, updates: Partial<Song>) => {
+  const handleSave = async (songId: number, updates: Partial<Song> & { approval_status?: 'APPROVED' | 'REJECTED' | 'PENDING' }) => {
     const song = songs.find((s) => s.id === songId);
     if (!song) return;
 
     try {
-      const payload: UpdateSongPayload = {
-        ai_energy: updates.ai_energy || song.ai_energy || '',
-        ai_accessibility: updates.ai_accessibility || song.ai_accessibility || '',
-        ai_explicit: updates.ai_explicit || song.ai_explicit || null,
-        ai_subgenre_1: updates.ai_subgenre_1 || song.ai_subgenre_1 || '',
-        ai_subgenre_2: updates.ai_subgenre_2 || null,
-        ai_subgenre_3: updates.ai_subgenre_3 || null,
-        curator_notes: updates.curator_notes || null,
-      };
+      const payload: UpdateSongPayload = {};
+
+      // Include metadata fields if provided
+      if (updates.ai_energy !== undefined) {
+        payload.ai_energy = updates.ai_energy || song.ai_energy || '';
+        payload.ai_accessibility = updates.ai_accessibility || song.ai_accessibility || '';
+        payload.ai_explicit = updates.ai_explicit || song.ai_explicit || null;
+        payload.ai_subgenre_1 = updates.ai_subgenre_1 || song.ai_subgenre_1 || '';
+        payload.ai_subgenre_2 = updates.ai_subgenre_2 || null;
+        payload.ai_subgenre_3 = updates.ai_subgenre_3 || null;
+      }
+
+      // Include curator notes if provided
+      if (updates.curator_notes !== undefined) {
+        payload.curator_notes = updates.curator_notes || null;
+      }
+
+      // Include approval status if provided (admin only - handled by API)
+      if (updates.approval_status !== undefined) {
+        payload.approval_status = updates.approval_status;
+      }
 
       const updatedSong = await updateSong(song.isrc, payload);
 
@@ -122,32 +136,44 @@ export default function SongsPage() {
         prevSongs.map((s) => (s.id === songId ? updatedSong : s))
       );
 
-      toast.success('Classification saved successfully');
+      // Show toast based on action (rejection toast handled in ReviewModal with undo option)
+      if (updates.approval_status !== 'REJECTED') {
+        toast.success('Changes saved successfully');
+      }
     } catch (error: any) {
       console.error('Error saving song:', error);
       toast.error(`Failed to save: ${error.message}`);
     }
   };
 
-  const handleNext = () => {
-    if (!selectedSong) return;
+  const handleNext = (): boolean => {
+    if (!selectedSong) return false;
 
     const currentIndex = songs.findIndex((s) => s.id === selectedSong.id);
     const nextSong = songs[currentIndex + 1];
 
     if (nextSong) {
       setSelectedSong(nextSong);
+      return true;
     } else {
       // If we're at the end of current page, try to go to next page
       if (currentPage < totalPages) {
         setCurrentPage(currentPage + 1);
         setIsModalOpen(false);
         toast.info('Moving to next page...');
+        return true;
       } else {
-        setIsModalOpen(false);
-        toast.info('No more songs in current filter');
+        // End of queue - handled by the ReviewModal
+        return false;
       }
     }
+  };
+
+  // Handler for when all pending songs have been reviewed
+  const handleEndOfQueue = () => {
+    setSelectedApprovalStatus('all');
+    setIsModalOpen(false);
+    toast.success('All pending songs reviewed!');
   };
 
   const handleModalClose = () => {
@@ -220,6 +246,7 @@ export default function SongsPage() {
           selectedSubgenre={selectedSubgenre}
           selectedStatus={selectedStatus}
           selectedReviewStatus={selectedReviewStatus}
+          selectedApprovalStatus={selectedApprovalStatus}
           selectedEnergy={selectedEnergy}
           selectedAccessibility={selectedAccessibility}
           selectedExplicit={selectedExplicit}
@@ -236,6 +263,10 @@ export default function SongsPage() {
           }}
           onReviewStatusChange={(value) => {
             setSelectedReviewStatus(value);
+            setCurrentPage(1);
+          }}
+          onApprovalStatusChange={(value) => {
+            setSelectedApprovalStatus(value);
             setCurrentPage(1);
           }}
           onEnergyChange={(value) => {
@@ -373,6 +404,7 @@ export default function SongsPage() {
         onClose={handleModalClose}
         onSave={handleSave}
         onNext={handleNext}
+        onEndOfQueue={handleEndOfQueue}
       />
 
       {/* Export Modal */}
@@ -383,6 +415,7 @@ export default function SongsPage() {
           subgenre: selectedSubgenre !== 'all' ? selectedSubgenre : undefined,
           status: selectedStatus !== 'all' ? selectedStatus : undefined,
           reviewStatus: selectedReviewStatus !== 'all' ? selectedReviewStatus : undefined,
+          approvalStatus: selectedApprovalStatus !== 'all' ? selectedApprovalStatus : undefined,
           energy: selectedEnergy !== 'all' ? selectedEnergy : undefined,
           accessibility: selectedAccessibility !== 'all' ? selectedAccessibility : undefined,
           explicit: selectedExplicit !== 'all' ? selectedExplicit : undefined,

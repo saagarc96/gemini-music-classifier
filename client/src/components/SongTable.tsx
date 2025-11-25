@@ -1,5 +1,5 @@
 import { Check, X, AlertCircle } from 'lucide-react';
-import { Song } from '../data/mockSongs';
+import { Song } from '../lib/api';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { ImageWithFallback } from './figma/ImageWithFallback';
@@ -70,6 +70,14 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
     }).format(date);
   };
 
+  // Get row background color based on approval status (only highlight rejected)
+  const getRowBackgroundStyle = (approvalStatus: Song['approval_status']) => {
+    if (approvalStatus === 'REJECTED') {
+      return { backgroundColor: 'rgba(239, 68, 68, 0.08)' }; // subtle red
+    }
+    return {};
+  };
+
   if (songs.length === 0) {
     return (
       <div className="bg-zinc-900 rounded-lg p-12 border border-zinc-800 text-center">
@@ -114,6 +122,7 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
               <tr
                 key={song.id}
                 className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors"
+                style={getRowBackgroundStyle(song.approval_status)}
               >
                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
                   <Checkbox
@@ -136,7 +145,14 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
                   )}
                 </td>
                 <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
-                  <div className="text-zinc-100 max-w-xs truncate">{song.title}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-100 max-w-xs truncate">{song.title}</span>
+                    {song.approval_status === 'REJECTED' && (
+                      <Badge className="text-xs flex-shrink-0" style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
+                        Rejected
+                      </Badge>
+                    )}
+                  </div>
                 </td>
                 <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   <div className="text-zinc-300 max-w-xs truncate">{song.artist}</div>
@@ -167,19 +183,11 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
                 </td>
                 <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   {song.reviewed && song.reviewed_by ? (
-                    <div className="flex items-start gap-2">
-                      <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                      <div className="text-sm">
-                        <div className="text-zinc-300">{song.reviewed_by}</div>
-                        <div className="text-zinc-500 text-xs">
-                          {formatDate(song.reviewed_at)}
-                        </div>
+                    <div className="text-sm">
+                      <div className="text-zinc-300">{song.reviewed_by}</div>
+                      <div className="text-zinc-500 text-xs">
+                        {formatDate(song.reviewed_at)}
                       </div>
-                    </div>
-                  ) : song.reviewed ? (
-                    <div className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-400" />
-                      <span className="text-zinc-400 text-sm">Reviewed</span>
                     </div>
                   ) : (
                     <span className="text-zinc-600">—</span>

@@ -25,6 +25,7 @@ model User {
   // Relations
   reviewedSongs Song[] @relation("ReviewedBy")
   createdSongs  Song[] @relation("CreatedBy")
+  approvedSongs Song[] @relation("ApprovedBy")
 
   @@map("users")
 }
@@ -68,13 +69,20 @@ model Song {
   aiSubgenre2     String? @map("ai_subgenre_2") @db.VarChar(100)
   aiSubgenre3     String? @map("ai_subgenre_3") @db.VarChar(100)
 
-  // Review metadata
+  // Review metadata (for metadata edits)
   reviewed     Boolean   @default(false)
   reviewedBy   String?   @map("reviewed_by") @db.VarChar(100)
   reviewedById String?   @map("reviewed_by_id")
   reviewer     User?     @relation("ReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedAt   DateTime? @map("reviewed_at")
   curatorNotes String?   @map("curator_notes")
+
+  // Approval workflow (separate from metadata review)
+  approvalStatus String    @default("PENDING") @map("approval_status") @db.VarChar(20)
+  approvedBy     String?   @map("approved_by") @db.VarChar(100)
+  approvedById   String?   @map("approved_by_id")
+  approver       User?     @relation("ApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt     DateTime? @map("approved_at")
 
   // Creator tracking
   createdById  String?   @map("created_by_id")
@@ -99,6 +107,8 @@ model Song {
   @@index([aiSubgenre3], map: "idx_subgenre_3")
   @@index([aiStatus], map: "idx_status")
   @@index([reviewed])
+  @@index([approvalStatus], map: "idx_approval_status")
+  @@index([approvedById], map: "idx_approved_by_id")
   @@index([spotifyTrackId], map: "idx_spotify_track_id")
   @@index([reviewedById], map: "idx_reviewed_by_id")
   @@index([createdById], map: "idx_created_by_id")
