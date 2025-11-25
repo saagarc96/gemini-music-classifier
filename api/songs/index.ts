@@ -9,6 +9,7 @@
  *   - subgenre: Filter by subgenre (searches aiSubgenre1/2/3)
  *   - status: Filter by aiStatus (SUCCESS, ERROR, etc.)
  *   - reviewStatus: Filter by reviewed (all, reviewed, unreviewed)
+ *   - approvalStatus: Filter by approvalStatus (all, pending, approved, rejected)
  *   - energy: Filter by aiEnergy
  *   - accessibility: Filter by aiAccessibility
  *   - playlistId: Filter by playlist ID
@@ -50,6 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const subgenre = req.query.subgenre as string;
     const status = req.query.status as string;
     const reviewStatus = req.query.reviewStatus as string;
+    const approvalStatus = req.query.approvalStatus as string;
     const energy = req.query.energy as string;
     const accessibility = req.query.accessibility as string;
     const explicit = req.query.explicit as string;
@@ -102,6 +104,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (reviewStatus === 'unreviewed') {
         where.reviewed = false;
       }
+    }
+
+    // Approval status filter (PENDING, APPROVED, REJECTED)
+    if (approvalStatus && approvalStatus !== 'all') {
+      where.approvalStatus = approvalStatus.toUpperCase();
     }
 
     // Energy filter
@@ -191,6 +198,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       reviewed_by: song.reviewedBy,
       reviewed_at: song.reviewedAt?.toISOString() || null,
       curator_notes: song.curatorNotes,
+      // Approval workflow fields
+      approval_status: (song as any).approvalStatus || 'PENDING',
+      approved_by: (song as any).approvedBy || null,
+      approved_at: (song as any).approvedAt?.toISOString() || null,
       created_at: song.createdAt.toISOString(),
       modified_at: song.modifiedAt.toISOString(),
     }));

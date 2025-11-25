@@ -2,11 +2,14 @@
  * GET /api/songs/export
  *
  * Exports songs to CSV format with optional filtering and configuration.
+ * By default, only exports APPROVED songs.
  *
  * Query Parameters:
  *   - subgenre: Filter by subgenre (searches aiSubgenre1/2/3)
  *   - status: Filter by aiStatus (SUCCESS, ERROR, etc.)
  *   - reviewStatus: Filter by reviewed (all, reviewed, unreviewed)
+ *   - approvalStatus: Filter by approval status (default: APPROVED only)
+ *   - includeAll: Set to 'true' to export all songs regardless of approval status
  *   - energy: Filter by aiEnergy
  *   - accessibility: Filter by aiAccessibility
  *   - explicit: Filter by aiExplicit
@@ -49,6 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const subgenre = req.query.subgenre as string;
     const status = req.query.status as string;
     const reviewStatus = req.query.reviewStatus as string;
+    const approvalStatus = req.query.approvalStatus as string;
     const energy = req.query.energy as string;
     const accessibility = req.query.accessibility as string;
     const explicit = req.query.explicit as string;
@@ -57,6 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const playlistName = req.query.playlistName as string;
     const includeAccessibility = req.query.includeAccessibility !== 'false'; // Default: true
     const includeExplicit = req.query.includeExplicit !== 'false'; // Default: true
+    const includeAll = req.query.includeAll === 'true'; // Default: false (only approved)
     const preview = req.query.preview === 'true'; // Default: false
     const isrcs = req.query.isrcs as string; // Comma-separated list of ISRCs
 
@@ -145,6 +150,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         where.reviewed = true;
       } else if (reviewStatus === 'unreviewed') {
         where.reviewed = false;
+      }
+    }
+
+    // Approval status filter (defaults to APPROVED only unless includeAll is true)
+    if (!includeAll) {
+      if (approvalStatus && approvalStatus !== 'all') {
+        // Use explicit filter if provided
+        where.approvalStatus = approvalStatus.toUpperCase();
+      } else {
+        // Default: only export approved songs
+        where.approvalStatus = 'APPROVED';
       }
     }
 

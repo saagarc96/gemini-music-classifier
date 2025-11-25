@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, User, X } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ChevronDown, ChevronRight, User, X, Check } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Dialog, DialogContent } from './ui/dialog';
 import { AudioPlayer } from './AudioPlayer';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
-import { Song } from '../lib/api';
+import { Song, updateSong } from '../lib/api';
 import { ENERGY_LEVELS, ACCESSIBILITY_TYPES, EXPLICIT_TYPES, SUBGENRES } from '../data/constants';
 import {
   Select,
@@ -18,16 +18,18 @@ import {
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useAuth } from '../contexts/AuthContext';
 import { Badge } from './ui/badge';
+import { toast } from 'sonner';
 
 interface ReviewModalProps {
   song: Song | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (songId: number, updates: Partial<Song>) => void;
-  onNext: () => void;
+  onSave: (songId: number, updates: Partial<Song> & { approval_status?: 'APPROVED' | 'REJECTED' | 'PENDING' }) => void;
+  onNext: () => boolean; // Returns true if there's a next song
+  onEndOfQueue: () => void; // Called when all pending songs have been reviewed
 }
 
-export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewModalProps) {
+export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueue }: ReviewModalProps) {
   const { user } = useAuth();
   const [energy, setEnergy] = useState<string | undefined>(undefined);
   const [accessibility, setAccessibility] = useState<string | undefined>(undefined);
@@ -36,6 +38,11 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
   const [subgenre2, setSubgenre2] = useState<string | undefined>(undefined);
   const [subgenre3, setSubgenre3] = useState<string | undefined>(undefined);
   const [notes, setNotes] = useState('');
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const lastRejectedIsrc = useRef<string | null>(null);
+
+  const isAdmin = user?.role === 'ADMIN';
 
   useEffect(() => {
     if (song) {
@@ -46,6 +53,7 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
       setSubgenre2(song.ai_subgenre_2 && song.ai_subgenre_2.trim() !== '' ? song.ai_subgenre_2 : undefined);
       setSubgenre3(song.ai_subgenre_3 && song.ai_subgenre_3.trim() !== '' ? song.ai_subgenre_3 : undefined);
       setNotes(song.curator_notes || '');
+      setNotesOpen(false); // Reset notes collapsible when song changes
     }
   }, [song]);
 
@@ -84,6 +92,87 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
       reviewed_at: new Date().toISOString(),
     });
     onNext();
+  };
+
+  // Handle approve & next (admin only)
+  const handleApproveAndNext = async () => {
+    if (!song || !isAdmin) return;
+    setIsLoading(true);
+
+    try {
+      await onSave(song.id, {
+        approval_status: 'APPROVED',
+        curator_notes: notes || null,
+      });
+
+      // Check if there's a next song
+      const hasNext = onNext();
+      if (!hasNext) {
+        // End of queue - switch filter to "All"
+        onEndOfQueue();
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle reject (admin only)
+  const handleReject = async () => {
+    if (!song || !isAdmin) return;
+    setIsLoading(true);
+
+    const rejectedIsrc = song.isrc;
+    lastRejectedIsrc.current = rejectedIsrc;
+
+    try {
+      await onSave(song.id, {
+        approval_status: 'REJECTED',
+        curator_notes: notes || null,
+      });
+
+      // Show undo toast
+      toast('Song rejected', {
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            try {
+              await updateSong(rejectedIsrc, { approval_status: 'PENDING' });
+              toast.success('Rejection undone');
+            } catch (error) {
+              toast.error('Failed to undo rejection');
+            }
+          },
+        },
+        duration: 5000,
+      });
+
+      // Check if there's a next song
+      const hasNext = onNext();
+      if (!hasNext) {
+        // End of queue - switch filter to "All"
+        onEndOfQueue();
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle save metadata only (closes modal)
+  const handleSaveMetadata = () => {
+    if (!song) return;
+
+    onSave(song.id, {
+      ai_energy: energy || '',
+      ai_accessibility: accessibility || '',
+      ai_explicit: explicit || null,
+      ai_subgenre_1: subgenre1 || '',
+      ai_subgenre_2: (subgenre2 && subgenre2 !== '_none') ? subgenre2 : null,
+      ai_subgenre_3: (subgenre3 && subgenre3 !== '_none') ? subgenre3 : null,
+      curator_notes: notes || null,
+      reviewed: true,
+      reviewed_at: new Date().toISOString(),
+    });
+    onClose();
   };
 
   if (!song) return null;
@@ -150,6 +239,78 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
             title={song.title}
             artist={song.artist}
           />
+
+          {/* Approval Actions (Admin only) */}
+          {isAdmin && (
+            <div className="flex items-center gap-3 p-4 rounded-lg border border-zinc-800" style={{ backgroundColor: '#18181b' }}>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium text-zinc-300">Review Decision</span>
+                  {song.approval_status === 'APPROVED' && (
+                    <Badge className="text-xs" style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' }}>
+                      Approved
+                    </Badge>
+                  )}
+                  {song.approval_status === 'REJECTED' && (
+                    <Badge className="text-xs" style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
+                      Rejected
+                    </Badge>
+                  )}
+                  {song.approval_status === 'PENDING' && (
+                    <Badge className="text-xs bg-zinc-700 text-zinc-300">
+                      Pending
+                    </Badge>
+                  )}
+                </div>
+                {song.approved_by && song.approval_status !== 'PENDING' && (
+                  <p className="text-xs text-zinc-500">
+                    by {song.approved_by}
+                    {song.approved_at && ` on ${new Date(song.approved_at).toLocaleDateString()}`}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleReject}
+                  disabled={isLoading}
+                  size="sm"
+                  style={{ backgroundColor: '#7f1d1d', color: '#ef4444', borderColor: '#7f1d1d' }}
+                  className="hover:opacity-90"
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Reject
+                </Button>
+                <Button
+                  onClick={handleSaveMetadata}
+                  disabled={isLoading}
+                  variant="outline"
+                  size="sm"
+                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                >
+                  Save Metadata
+                </Button>
+                <Button
+                  onClick={handleApproveAndNext}
+                  disabled={isLoading}
+                  size="sm"
+                  style={{ backgroundColor: '#16a34a', color: '#ffffff' }}
+                  className="hover:opacity-90"
+                >
+                  <Check className="w-4 h-4 mr-1" />
+                  Approve & Next
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Curator notice (non-admin) */}
+          {!isAdmin && (
+            <div className="flex items-center justify-center p-3 rounded-lg border border-zinc-800 bg-zinc-900/50">
+              <span className="text-sm text-zinc-400">
+                Admin review required for approval decisions
+              </span>
+            </div>
+          )}
 
           {/* AI Classification */}
           <div className="space-y-4">
@@ -343,7 +504,7 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
           )}
 
           {/* Curator Notes */}
-          <Collapsible>
+          <Collapsible open={notesOpen} onOpenChange={setNotesOpen}>
             <CollapsibleTrigger className="flex items-center justify-between w-full p-3 bg-zinc-900 border border-zinc-800 rounded-md hover:bg-zinc-800 transition-colors group">
               <Label className="text-zinc-300 cursor-pointer">Curator Notes (Optional)</Label>
               <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-data-[state=open]:rotate-180" />
@@ -353,7 +514,7 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add any notes about this classification..."
+                placeholder="Add any notes about this classification... (useful for rejection reasons)"
                 className="bg-zinc-900 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 min-h-24"
               />
             </CollapsibleContent>

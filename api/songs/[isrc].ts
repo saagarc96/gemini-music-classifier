@@ -1,19 +1,22 @@
 /**
  * PATCH /api/songs/:isrc
  *
- * Updates a song's classification using Prisma.
- * Allows curators to edit AI-generated classifications.
+ * Updates a song's classification and/or approval status using Prisma.
  *
- * Body Parameters (all optional except those marked required):
- *   - ai_energy: Energy level (required)
- *   - ai_accessibility: Accessibility type (required)
- *   - ai_subgenre_1: Primary subgenre (required)
+ * Body Parameters:
+ *   Metadata fields (any user can update):
+ *   - ai_energy: Energy level
+ *   - ai_accessibility: Accessibility type
+ *   - ai_subgenre_1: Primary subgenre
  *   - ai_subgenre_2: Secondary subgenre (optional)
  *   - ai_subgenre_3: Tertiary subgenre (optional)
  *   - curator_notes: Curator's notes (optional)
  *
+ *   Approval fields (admin only):
+ *   - approval_status: 'APPROVED' | 'REJECTED' | 'PENDING'
+ *
  * Response:
- *   { success: true, song: Song }
+ *   { success: true, data: Song }
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -26,6 +29,7 @@ const prisma = new PrismaClient();
 const VALID_ENERGY = ['Very Low', 'Low', 'Medium', 'High', 'Very High'];
 const VALID_ACCESSIBILITY = ['Eclectic', 'Timeless', 'Commercial', 'Cheesy'];
 const VALID_EXPLICIT = ['Explicit', 'Suggestive', 'Family Friendly'];
+const VALID_APPROVAL_STATUS = ['PENDING', 'APPROVED', 'REJECTED'];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow PATCH requests
@@ -48,55 +52,106 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const payload = req.body;
 
-    // Validate required fields
-    if (!payload.ai_energy || !payload.ai_accessibility || !payload.ai_subgenre_1) {
-      return res.status(400).json({
-        error: 'Missing required fields',
-        message: 'ai_energy, ai_accessibility, and ai_subgenre_1 are required',
-      });
+    // Check if this is an approval action (approval_status provided)
+    const isApprovalAction = payload.approval_status !== undefined;
+
+    // Check if this is a metadata-only update
+    const isMetadataUpdate = payload.ai_energy !== undefined ||
+                             payload.ai_accessibility !== undefined ||
+                             payload.ai_subgenre_1 !== undefined;
+
+    // Build update data object dynamically
+    const updateData: any = {
+      modifiedAt: new Date(),
+    };
+
+    // Handle approval status changes (admin only)
+    if (isApprovalAction) {
+      // Verify user is an admin
+      if (user.role !== 'ADMIN') {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Admin role required for approval actions',
+        });
+      }
+
+      // Validate approval status value
+      const approvalStatus = payload.approval_status.toUpperCase();
+      if (!VALID_APPROVAL_STATUS.includes(approvalStatus)) {
+        return res.status(400).json({
+          error: 'Invalid approval status',
+          message: `Must be one of: ${VALID_APPROVAL_STATUS.join(', ')}`,
+        });
+      }
+
+      // Set approval fields
+      updateData.approvalStatus = approvalStatus;
+      updateData.approvedBy = user.name;
+      updateData.approvedById = user.id;
+      updateData.approvedAt = new Date();
     }
 
-    // Validate energy value
-    if (!VALID_ENERGY.includes(payload.ai_energy)) {
-      return res.status(400).json({
-        error: 'Invalid energy value',
-        message: `Must be one of: ${VALID_ENERGY.join(', ')}`,
-      });
+    // Handle metadata updates
+    if (isMetadataUpdate) {
+      // For full metadata updates, validate required fields
+      if (payload.ai_energy && payload.ai_accessibility && payload.ai_subgenre_1) {
+        // Validate energy value
+        if (!VALID_ENERGY.includes(payload.ai_energy)) {
+          return res.status(400).json({
+            error: 'Invalid energy value',
+            message: `Must be one of: ${VALID_ENERGY.join(', ')}`,
+          });
+        }
+
+        // Validate accessibility value
+        if (!VALID_ACCESSIBILITY.includes(payload.ai_accessibility)) {
+          return res.status(400).json({
+            error: 'Invalid accessibility value',
+            message: `Must be one of: ${VALID_ACCESSIBILITY.join(', ')}`,
+          });
+        }
+
+        // Validate explicit value (optional)
+        if (payload.ai_explicit && !VALID_EXPLICIT.includes(payload.ai_explicit)) {
+          return res.status(400).json({
+            error: 'Invalid explicit value',
+            message: `Must be one of: ${VALID_EXPLICIT.join(', ')}`,
+          });
+        }
+
+        // Set metadata fields
+        updateData.aiEnergy = payload.ai_energy;
+        updateData.aiAccessibility = payload.ai_accessibility;
+        updateData.aiExplicit = payload.ai_explicit || null;
+        updateData.aiSubgenre1 = payload.ai_subgenre_1;
+        updateData.aiSubgenre2 = payload.ai_subgenre_2 || null;
+        updateData.aiSubgenre3 = payload.ai_subgenre_3 || null;
+
+        // Mark as reviewed for metadata edits
+        updateData.reviewed = true;
+        updateData.reviewedBy = user.name;
+        updateData.reviewedById = user.id;
+        updateData.reviewedAt = new Date();
+      }
     }
 
-    // Validate accessibility value
-    if (!VALID_ACCESSIBILITY.includes(payload.ai_accessibility)) {
-      return res.status(400).json({
-        error: 'Invalid accessibility value',
-        message: `Must be one of: ${VALID_ACCESSIBILITY.join(', ')}`,
-      });
+    // Always update curator notes if provided
+    if (payload.curator_notes !== undefined) {
+      updateData.curatorNotes = payload.curator_notes || null;
     }
 
-    // Validate explicit value (optional)
-    if (payload.ai_explicit && !VALID_EXPLICIT.includes(payload.ai_explicit)) {
+    // Ensure we have something to update
+    if (Object.keys(updateData).length === 1 && updateData.modifiedAt) {
       return res.status(400).json({
-        error: 'Invalid explicit value',
-        message: `Must be one of: ${VALID_EXPLICIT.join(', ')}`,
+        error: 'No valid fields to update',
+        message: 'Provide either metadata fields or approval_status',
       });
     }
 
     // Update song using Prisma
     const updatedSong = await prisma.song.update({
       where: { isrc },
-      data: {
-        aiEnergy: payload.ai_energy,
-        aiAccessibility: payload.ai_accessibility,
-        aiExplicit: payload.ai_explicit || null,
-        aiSubgenre1: payload.ai_subgenre_1,
-        aiSubgenre2: payload.ai_subgenre_2 || null,
-        aiSubgenre3: payload.ai_subgenre_3 || null,
-        curatorNotes: payload.curator_notes || null,
-        reviewed: true,
-        reviewedBy: user.name, // Keep legacy string field for backward compatibility
-        reviewedById: user.id, // NEW: Track which user reviewed
-        reviewedAt: new Date(),
-        modifiedAt: new Date(),
-      },
+      data: updateData,
       include: {
         reviewer: {
           select: {
@@ -134,6 +189,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       reviewed_by: updatedSong.reviewedBy,
       reviewed_at: updatedSong.reviewedAt?.toISOString() || null,
       curator_notes: updatedSong.curatorNotes,
+      // Approval workflow fields
+      approval_status: (updatedSong as any).approvalStatus || 'PENDING',
+      approved_by: (updatedSong as any).approvedBy || null,
+      approved_at: (updatedSong as any).approvedAt?.toISOString() || null,
       created_at: updatedSong.createdAt.toISOString(),
       modified_at: updatedSong.modifiedAt.toISOString(),
     };
