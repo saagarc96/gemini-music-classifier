@@ -30,7 +30,7 @@ export default function SongsPage() {
   const [selectedSubgenre, setSelectedSubgenre] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedReviewStatus, setSelectedReviewStatus] = useState('all');
-  const [selectedApprovalStatus, setSelectedApprovalStatus] = useState('pending'); // Default to "Pending Review"
+  const [selectedApprovalStatus, setSelectedApprovalStatus] = useState('active'); // Default to "Active" (non-rejected songs)
   const [selectedEnergy, setSelectedEnergy] = useState('all');
   const [selectedAccessibility, setSelectedAccessibility] = useState('all');
   const [selectedExplicit, setSelectedExplicit] = useState('all');
@@ -136,12 +136,8 @@ export default function SongsPage() {
         prevSongs.map((s) => (s.id === songId ? updatedSong : s))
       );
 
-      // Show different toast based on action
-      if (updates.approval_status === 'APPROVED') {
-        toast.success('Song approved');
-      } else if (updates.approval_status === 'REJECTED') {
-        // Don't show toast here - handled in ReviewModal with undo option
-      } else {
+      // Show toast based on action (rejection toast handled in ReviewModal with undo option)
+      if (updates.approval_status !== 'REJECTED') {
         toast.success('Changes saved successfully');
       }
     } catch (error: any) {

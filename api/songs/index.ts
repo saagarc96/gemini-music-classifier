@@ -9,7 +9,7 @@
  *   - subgenre: Filter by subgenre (searches aiSubgenre1/2/3)
  *   - status: Filter by aiStatus (SUCCESS, ERROR, etc.)
  *   - reviewStatus: Filter by reviewed (all, reviewed, unreviewed)
- *   - approvalStatus: Filter by approvalStatus (all, pending, approved, rejected)
+ *   - approvalStatus: Filter by approvalStatus (all, active, pending, approved, rejected)
  *   - energy: Filter by aiEnergy
  *   - accessibility: Filter by aiAccessibility
  *   - playlistId: Filter by playlist ID
@@ -106,9 +106,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Approval status filter (PENDING, APPROVED, REJECTED)
+    // Approval status filter (PENDING, APPROVED, REJECTED, or 'active' for non-rejected)
     if (approvalStatus && approvalStatus !== 'all') {
-      where.approvalStatus = approvalStatus.toUpperCase();
+      if (approvalStatus === 'active') {
+        // Active = all non-rejected songs (soft approve model)
+        where.approvalStatus = { not: 'REJECTED' };
+      } else {
+        where.approvalStatus = approvalStatus.toUpperCase();
+      }
     }
 
     // Energy filter

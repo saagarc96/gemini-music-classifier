@@ -70,16 +70,12 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
     }).format(date);
   };
 
-  // Get row background color based on approval status
+  // Get row background color based on approval status (only highlight rejected)
   const getRowBackgroundStyle = (approvalStatus: Song['approval_status']) => {
-    switch (approvalStatus) {
-      case 'APPROVED':
-        return { backgroundColor: 'rgba(34, 197, 94, 0.08)' }; // subtle green
-      case 'REJECTED':
-        return { backgroundColor: 'rgba(239, 68, 68, 0.08)' }; // subtle red
-      default:
-        return {};
+    if (approvalStatus === 'REJECTED') {
+      return { backgroundColor: 'rgba(239, 68, 68, 0.08)' }; // subtle red
     }
+    return {};
   };
 
   if (songs.length === 0) {
@@ -149,7 +145,14 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
                   )}
                 </td>
                 <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
-                  <div className="text-zinc-100 max-w-xs truncate">{song.title}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-100 max-w-xs truncate">{song.title}</span>
+                    {song.approval_status === 'REJECTED' && (
+                      <Badge className="text-xs flex-shrink-0" style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
+                        Rejected
+                      </Badge>
+                    )}
+                  </div>
                 </td>
                 <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
                   <div className="text-zinc-300 max-w-xs truncate">{song.artist}</div>
@@ -179,39 +182,15 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
                   </div>
                 </td>
                 <td className="p-4 cursor-pointer" onClick={() => onSongClick(song)}>
-                  {song.approval_status === 'APPROVED' && (
-                    <div className="flex items-start gap-2">
-                      <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#22c55e' }} />
-                      <div className="text-sm">
-                        <div className="text-zinc-300">{song.approved_by || song.reviewed_by}</div>
-                        <div className="text-zinc-500 text-xs">
-                          {formatDate(song.approved_at || song.reviewed_at)}
-                        </div>
+                  {song.reviewed && song.reviewed_by ? (
+                    <div className="text-sm">
+                      <div className="text-zinc-300">{song.reviewed_by}</div>
+                      <div className="text-zinc-500 text-xs">
+                        {formatDate(song.reviewed_at)}
                       </div>
                     </div>
-                  )}
-                  {song.approval_status === 'REJECTED' && (
-                    <div className="flex items-start gap-2">
-                      <X className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#ef4444' }} />
-                      <div className="text-sm">
-                        <div className="text-zinc-400">{song.approved_by || song.reviewed_by}</div>
-                        <div className="text-zinc-500 text-xs">
-                          {formatDate(song.approved_at || song.reviewed_at)}
-                        </div>
-                        {song.curator_notes && (
-                          <div
-                            className="text-xs italic truncate max-w-[150px]"
-                            style={{ color: '#71717a' }}
-                            title={song.curator_notes}
-                          >
-                            "{song.curator_notes}"
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {song.approval_status === 'PENDING' && (
-                    <span className="text-zinc-600">Pending...</span>
+                  ) : (
+                    <span className="text-zinc-600">—</span>
                   )}
                 </td>
               </tr>

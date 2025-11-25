@@ -2,14 +2,14 @@
  * GET /api/songs/export
  *
  * Exports songs to CSV format with optional filtering and configuration.
- * By default, only exports APPROVED songs.
+ * By default, exports all non-REJECTED songs (soft approve model).
  *
  * Query Parameters:
  *   - subgenre: Filter by subgenre (searches aiSubgenre1/2/3)
  *   - status: Filter by aiStatus (SUCCESS, ERROR, etc.)
  *   - reviewStatus: Filter by reviewed (all, reviewed, unreviewed)
- *   - approvalStatus: Filter by approval status (default: APPROVED only)
- *   - includeAll: Set to 'true' to export all songs regardless of approval status
+ *   - approvalStatus: Filter by approval status (default: non-REJECTED songs)
+ *   - includeAll: Set to 'true' to export all songs including REJECTED
  *   - energy: Filter by aiEnergy
  *   - accessibility: Filter by aiAccessibility
  *   - explicit: Filter by aiExplicit
@@ -153,14 +153,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Approval status filter (defaults to APPROVED only unless includeAll is true)
+    // Approval status filter (defaults to non-REJECTED unless includeAll is true)
     if (!includeAll) {
       if (approvalStatus && approvalStatus !== 'all') {
-        // Use explicit filter if provided
-        where.approvalStatus = approvalStatus.toUpperCase();
+        if (approvalStatus === 'active') {
+          // Active = all non-rejected songs
+          where.approvalStatus = { not: 'REJECTED' };
+        } else {
+          // Use explicit filter if provided
+          where.approvalStatus = approvalStatus.toUpperCase();
+        }
       } else {
-        // Default: only export approved songs
-        where.approvalStatus = 'APPROVED';
+        // Default: export all non-rejected songs (soft approve model)
+        where.approvalStatus = { not: 'REJECTED' };
       }
     }
 

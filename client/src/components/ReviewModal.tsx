@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, ChevronRight, User, X, Check } from 'lucide-react';
+import { ChevronDown, ChevronRight, User, X } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Dialog, DialogContent } from './ui/dialog';
 import { AudioPlayer } from './AudioPlayer';
@@ -94,15 +94,23 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueu
     onNext();
   };
 
-  // Handle approve & next (admin only)
-  const handleApproveAndNext = async () => {
+  // Handle next (admin only) - auto-saves any metadata edits and moves to next
+  const handleNext = async () => {
     if (!song || !isAdmin) return;
     setIsLoading(true);
 
     try {
+      // Auto-save any metadata edits
       await onSave(song.id, {
-        approval_status: 'APPROVED',
+        ai_energy: energy || '',
+        ai_accessibility: accessibility || '',
+        ai_explicit: explicit || null,
+        ai_subgenre_1: subgenre1 || '',
+        ai_subgenre_2: (subgenre2 && subgenre2 !== '_none') ? subgenre2 : null,
+        ai_subgenre_3: (subgenre3 && subgenre3 !== '_none') ? subgenre3 : null,
         curator_notes: notes || null,
+        reviewed: true,
+        reviewed_at: new Date().toISOString(),
       });
 
       // Check if there's a next song
@@ -155,24 +163,6 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueu
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Handle save metadata only (closes modal)
-  const handleSaveMetadata = () => {
-    if (!song) return;
-
-    onSave(song.id, {
-      ai_energy: energy || '',
-      ai_accessibility: accessibility || '',
-      ai_explicit: explicit || null,
-      ai_subgenre_1: subgenre1 || '',
-      ai_subgenre_2: (subgenre2 && subgenre2 !== '_none') ? subgenre2 : null,
-      ai_subgenre_3: (subgenre3 && subgenre3 !== '_none') ? subgenre3 : null,
-      curator_notes: notes || null,
-      reviewed: true,
-      reviewed_at: new Date().toISOString(),
-    });
-    onClose();
   };
 
   if (!song) return null;
@@ -240,33 +230,15 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueu
             artist={song.artist}
           />
 
-          {/* Approval Actions (Admin only) */}
+          {/* Admin Review Actions */}
           {isAdmin && (
-            <div className="flex items-center gap-3 p-4 rounded-lg border border-zinc-800" style={{ backgroundColor: '#18181b' }}>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-zinc-300">Review Decision</span>
-                  {song.approval_status === 'APPROVED' && (
-                    <Badge className="text-xs" style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' }}>
-                      Approved
-                    </Badge>
-                  )}
-                  {song.approval_status === 'REJECTED' && (
-                    <Badge className="text-xs" style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
-                      Rejected
-                    </Badge>
-                  )}
-                  {song.approval_status === 'PENDING' && (
-                    <Badge className="text-xs bg-zinc-700 text-zinc-300">
-                      Pending
-                    </Badge>
-                  )}
-                </div>
-                {song.approved_by && song.approval_status !== 'PENDING' && (
-                  <p className="text-xs text-zinc-500">
-                    by {song.approved_by}
-                    {song.approved_at && ` on ${new Date(song.approved_at).toLocaleDateString()}`}
-                  </p>
+            <div className="flex items-center justify-between p-4 rounded-lg border border-zinc-800" style={{ backgroundColor: '#18181b' }}>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-zinc-300">Admin Review</span>
+                {song.approval_status === 'REJECTED' && (
+                  <Badge className="text-xs" style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
+                    Rejected
+                  </Badge>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -281,34 +253,15 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueu
                   Reject
                 </Button>
                 <Button
-                  onClick={handleSaveMetadata}
-                  disabled={isLoading}
-                  variant="outline"
-                  size="sm"
-                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-                >
-                  Save Metadata
-                </Button>
-                <Button
-                  onClick={handleApproveAndNext}
+                  onClick={handleNext}
                   disabled={isLoading}
                   size="sm"
-                  style={{ backgroundColor: '#16a34a', color: '#ffffff' }}
-                  className="hover:opacity-90"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
                 >
-                  <Check className="w-4 h-4 mr-1" />
-                  Approve & Next
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>
-            </div>
-          )}
-
-          {/* Curator notice (non-admin) */}
-          {!isAdmin && (
-            <div className="flex items-center justify-center p-3 rounded-lg border border-zinc-800 bg-zinc-900/50">
-              <span className="text-sm text-zinc-400">
-                Admin review required for approval decisions
-              </span>
             </div>
           )}
 

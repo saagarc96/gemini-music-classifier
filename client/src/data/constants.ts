@@ -220,18 +220,16 @@ export const REVIEW_STATUSES = [
   "unreviewed",
 ] as const;
 
-// Approval statuses for approve/reject workflow
+// Approval statuses for reject-only workflow (soft approve model)
 export const APPROVAL_STATUSES = [
   "all",
-  "pending",
-  "approved",
+  "active",
   "rejected",
 ] as const;
 
 export const APPROVAL_STATUS_LABELS: Record<string, string> = {
-  all: "All Statuses",
-  pending: "Pending Review",
-  approved: "Approved",
+  all: "All Songs",
+  active: "Active",
   rejected: "Rejected",
 };
 
