@@ -14,6 +14,7 @@
  *   - includeAccessibility: Include ACCESSIBILITY column (default: true)
  *   - includeExplicit: Include EXPLICIT column (default: true)
  *   - preview: Return only first 5 rows for preview (default: false)
+ *   - includeAll: Include all approval statuses (default: false, exports only APPROVED)
  *
  * Response:
  *   - Content-Type: text/csv
@@ -59,9 +60,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const includeExplicit = req.query.includeExplicit !== 'false'; // Default: true
     const preview = req.query.preview === 'true'; // Default: false
     const isrcs = req.query.isrcs as string; // Comma-separated list of ISRCs
+    const includeAll = req.query.includeAll === 'true'; // Default: false (export only APPROVED)
 
     // Build Prisma where clause (same logic as GET /api/songs)
     const where: any = {};
+
+    // By default, only export APPROVED songs unless includeAll is true
+    if (!includeAll) {
+      where.approvalStatus = 'APPROVED';
+    }
 
     // If ISRCs are provided, only export those specific songs
     if (isrcs && isrcs.trim()) {

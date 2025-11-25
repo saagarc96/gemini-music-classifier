@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, User, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, User, X, Check, Ban } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Dialog, DialogContent } from './ui/dialog';
 import { AudioPlayer } from './AudioPlayer';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
-import { Song } from '../lib/api';
+import { Song, updateSong } from '../lib/api';
 import { ENERGY_LEVELS, ACCESSIBILITY_TYPES, EXPLICIT_TYPES, SUBGENRES } from '../data/constants';
+import { toast } from 'sonner';
 import {
   Select,
   SelectContent,
@@ -25,9 +26,11 @@ interface ReviewModalProps {
   onClose: () => void;
   onSave: (songId: number, updates: Partial<Song>) => void;
   onNext: () => void;
+  onApprovalStatusChange?: (newStatus: string) => void;
+  onSongUpdate?: (updatedSong: Song) => void;
 }
 
-export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewModalProps) {
+export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onApprovalStatusChange, onSongUpdate }: ReviewModalProps) {
   const { user } = useAuth();
   const [energy, setEnergy] = useState<string | undefined>(undefined);
   const [accessibility, setAccessibility] = useState<string | undefined>(undefined);
@@ -51,6 +54,90 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
 
   const clearSubgenre2 = () => setSubgenre2(undefined);
   const clearSubgenre3 = () => setSubgenre3(undefined);
+
+  const isAdmin = user?.role === 'ADMIN';
+
+  // Handle Approve & Next (admin only)
+  const handleApproveAndNext = async () => {
+    if (!song) return;
+
+    try {
+      const updatedSong = await updateSong(song.isrc, {
+        approval_status: 'APPROVED',
+        curator_notes: notes || undefined,
+      });
+
+      if (onSongUpdate) {
+        onSongUpdate(updatedSong);
+      }
+
+      toast.success('Song approved');
+      onNext();
+    } catch (error: any) {
+      console.error('Error approving song:', error);
+      toast.error(`Failed to approve: ${error.message}`);
+    }
+  };
+
+  // Handle Reject (admin only)
+  const handleReject = async () => {
+    if (!song) return;
+
+    try {
+      const updatedSong = await updateSong(song.isrc, {
+        approval_status: 'REJECTED',
+        curator_notes: notes || undefined,
+      });
+
+      if (onSongUpdate) {
+        onSongUpdate(updatedSong);
+      }
+
+      // Show undo toast
+      toast('Song rejected', {
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            try {
+              const restoredSong = await updateSong(song.isrc, {
+                approval_status: 'PENDING',
+              });
+              if (onSongUpdate) {
+                onSongUpdate(restoredSong);
+              }
+              toast.success('Rejection undone');
+            } catch (error: any) {
+              toast.error(`Failed to undo: ${error.message}`);
+            }
+          },
+        },
+        duration: 5000,
+      });
+
+      onNext();
+    } catch (error: any) {
+      console.error('Error rejecting song:', error);
+      toast.error(`Failed to reject: ${error.message}`);
+    }
+  };
+
+  // Handle Save Metadata (closes modal per PRD)
+  const handleSaveMetadata = () => {
+    if (!song) return;
+
+    onSave(song.id, {
+      ai_energy: energy || '',
+      ai_accessibility: accessibility || '',
+      ai_explicit: explicit || null,
+      ai_subgenre_1: subgenre1 || '',
+      ai_subgenre_2: (subgenre2 && subgenre2 !== '_none') ? subgenre2 : null,
+      ai_subgenre_3: (subgenre3 && subgenre3 !== '_none') ? subgenre3 : null,
+      curator_notes: notes || null,
+      reviewed: true,
+      reviewed_at: new Date().toISOString(),
+    });
+    onClose();
+  };
 
   const handleSave = () => {
     if (!song) return;
@@ -136,12 +223,80 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext }: ReviewMod
                 {user?.role}
               </Badge>
             </div>
-            {song.reviewed && song.reviewed_by && (
-              <div className="text-xs text-zinc-500">
-                Previously reviewed by <span className="text-zinc-400">{song.reviewed_by}</span>
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {/* Current approval status indicator */}
+              {song.approval_status && (
+                <Badge
+                  variant="outline"
+                  className="text-xs"
+                  style={{
+                    backgroundColor: song.approval_status === 'APPROVED' ? 'rgba(34, 197, 94, 0.15)' :
+                                    song.approval_status === 'REJECTED' ? 'rgba(239, 68, 68, 0.15)' :
+                                    'rgba(161, 161, 170, 0.15)',
+                    borderColor: song.approval_status === 'APPROVED' ? '#22c55e' :
+                                song.approval_status === 'REJECTED' ? '#ef4444' :
+                                '#71717a',
+                    color: song.approval_status === 'APPROVED' ? '#22c55e' :
+                          song.approval_status === 'REJECTED' ? '#ef4444' :
+                          '#a1a1aa',
+                  }}
+                >
+                  {song.approval_status === 'APPROVED' && <Check className="w-3 h-3 mr-1" />}
+                  {song.approval_status === 'REJECTED' && <X className="w-3 h-3 mr-1" />}
+                  {song.approval_status}
+                </Badge>
+              )}
+              {song.reviewed && song.reviewed_by && (
+                <div className="text-xs text-zinc-500">
+                  Previously reviewed by <span className="text-zinc-400">{song.reviewed_by}</span>
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Approval Actions - Admin Only */}
+          {isAdmin && (
+            <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg border border-zinc-800">
+              <span className="text-sm text-zinc-400">Review Decision:</span>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleReject}
+                  size="sm"
+                  style={{ backgroundColor: '#7f1d1d', color: '#ef4444', borderColor: '#991b1b' }}
+                  className="hover:opacity-80"
+                >
+                  <Ban className="w-4 h-4 mr-1" />
+                  Reject
+                </Button>
+                <Button
+                  onClick={handleSaveMetadata}
+                  size="sm"
+                  variant="outline"
+                  className="border-zinc-600 text-zinc-300 hover:bg-zinc-800"
+                >
+                  Save Metadata
+                </Button>
+                <Button
+                  onClick={handleApproveAndNext}
+                  size="sm"
+                  style={{ backgroundColor: '#16a34a', color: '#ffffff' }}
+                  className="hover:opacity-80"
+                >
+                  <Check className="w-4 h-4 mr-1" />
+                  Approve & Next
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Curator notice - Non-admin */}
+          {!isAdmin && (
+            <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-800">
+              <span className="text-sm text-zinc-500">
+                Admin review required for approval/rejection. You can edit metadata below.
+              </span>
+            </div>
+          )}
 
           {/* Audio Player */}
           <AudioPlayer

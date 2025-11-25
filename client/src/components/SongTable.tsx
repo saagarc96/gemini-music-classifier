@@ -1,5 +1,5 @@
 import { Check, X, AlertCircle } from 'lucide-react';
-import { Song } from '../data/mockSongs';
+import { Song } from '../lib/api';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { ImageWithFallback } from './figma/ImageWithFallback';
@@ -70,6 +70,18 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
     }).format(date);
   };
 
+  // Get row background style based on approval status
+  const getRowStyle = (approvalStatus: string | undefined) => {
+    switch (approvalStatus) {
+      case 'APPROVED':
+        return { backgroundColor: 'rgba(34, 197, 94, 0.08)' }; // subtle green
+      case 'REJECTED':
+        return { backgroundColor: 'rgba(239, 68, 68, 0.08)' }; // subtle red
+      default:
+        return undefined; // no tint for pending
+    }
+  };
+
   if (songs.length === 0) {
     return (
       <div className="bg-zinc-900 rounded-lg p-12 border border-zinc-800 text-center">
@@ -114,6 +126,7 @@ export function SongTable({ songs, selectedIsrcs, onSongClick, onToggleSelection
               <tr
                 key={song.id}
                 className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors"
+                style={getRowStyle(song.approval_status)}
               >
                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
                   <Checkbox

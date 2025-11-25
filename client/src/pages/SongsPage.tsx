@@ -29,12 +29,13 @@ export default function SongsPage() {
   // Filter states
   const [selectedSubgenre, setSelectedSubgenre] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
-  const [selectedReviewStatus, setSelectedReviewStatus] = useState('unreviewed');
+  const [selectedReviewStatus, setSelectedReviewStatus] = useState('all');
   const [selectedEnergy, setSelectedEnergy] = useState('all');
   const [selectedAccessibility, setSelectedAccessibility] = useState('all');
   const [selectedExplicit, setSelectedExplicit] = useState('all');
   const [selectedBatchId, setSelectedBatchId] = useState('all');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState('all');
+  const [selectedApprovalStatus, setSelectedApprovalStatus] = useState('pending'); // Default to pending per PRD
   const [searchQuery, setSearchQuery] = useState('');
 
   // Sort states
@@ -53,12 +54,12 @@ export default function SongsPage() {
   // Clear selections when filters change
   useEffect(() => {
     setSelectedIsrcs(new Set());
-  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, selectedPlaylistId, searchQuery]);
+  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, selectedPlaylistId, selectedApprovalStatus, searchQuery]);
 
   // Fetch songs when filters or page changes
   useEffect(() => {
     fetchSongs();
-  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, selectedPlaylistId, searchQuery, currentPage, sortBy, sortOrder, limit]);
+  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, selectedPlaylistId, selectedApprovalStatus, searchQuery, currentPage, sortBy, sortOrder, limit]);
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -74,6 +75,7 @@ export default function SongsPage() {
         explicit: selectedExplicit !== 'all' ? selectedExplicit : undefined,
         uploadBatchId: selectedBatchId !== 'all' ? selectedBatchId : undefined,
         playlistId: selectedPlaylistId !== 'all' ? selectedPlaylistId : undefined,
+        approvalStatus: selectedApprovalStatus !== 'all' ? selectedApprovalStatus : undefined,
         search: searchQuery.trim() || undefined,
         sortBy,
         sortOrder,
@@ -225,6 +227,7 @@ export default function SongsPage() {
           selectedExplicit={selectedExplicit}
           selectedBatchId={selectedBatchId}
           selectedPlaylistId={selectedPlaylistId}
+          selectedApprovalStatus={selectedApprovalStatus}
           searchQuery={searchQuery}
           onSubgenreChange={(value) => {
             setSelectedSubgenre(value);
@@ -256,6 +259,10 @@ export default function SongsPage() {
           }}
           onPlaylistChange={(value) => {
             setSelectedPlaylistId(value);
+            setCurrentPage(1);
+          }}
+          onApprovalStatusChange={(value) => {
+            setSelectedApprovalStatus(value);
             setCurrentPage(1);
           }}
           onSearchChange={(value) => {
@@ -373,6 +380,16 @@ export default function SongsPage() {
         onClose={handleModalClose}
         onSave={handleSave}
         onNext={handleNext}
+        onSongUpdate={(updatedSong) => {
+          // Update local state with the new song data
+          setSongs((prevSongs) =>
+            prevSongs.map((s) => (s.isrc === updatedSong.isrc ? updatedSong : s))
+          );
+          // Update selected song if it's the one being updated
+          if (selectedSong?.isrc === updatedSong.isrc) {
+            setSelectedSong(updatedSong);
+          }
+        }}
       />
 
       {/* Export Modal */}

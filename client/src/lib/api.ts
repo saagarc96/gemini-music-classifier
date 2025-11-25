@@ -29,6 +29,9 @@ export interface Song {
   reviewed_by: string | null;
   reviewed_at: string | null;
   curator_notes: string | null;
+  approval_status: "PENDING" | "APPROVED" | "REJECTED";
+  approved_by: string | null;
+  approved_at: string | null;
   created_at: string;
   modified_at: string;
 }
@@ -78,16 +81,18 @@ export interface GetSongsParams {
   search?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  approvalStatus?: string;
 }
 
 export interface UpdateSongPayload {
-  ai_energy: string;
-  ai_accessibility: string;
+  ai_energy?: string;
+  ai_accessibility?: string;
   ai_explicit?: string | null;
-  ai_subgenre_1: string;
+  ai_subgenre_1?: string;
   ai_subgenre_2?: string | null;
   ai_subgenre_3?: string | null;
   curator_notes?: string | null;
+  approval_status?: "APPROVED" | "REJECTED" | "PENDING";
 }
 
 /**

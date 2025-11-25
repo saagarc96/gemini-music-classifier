@@ -1,8 +1,33 @@
 # PRD: Approve/Reject Feature - REVISED
 
 > **Revision Date:** 2025-01-25
-> **Status:** Ready for Implementation
+> **Status:** Implementation In Progress
 > **Original PRDs:** `PRD-approve-reject-feature.md`, `PRD-approve-reject-UI-BRIEF.md`
+
+---
+
+## Implementation Status (Updated 2025-11-25)
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| **Phase 1: Database & API** | ✅ Complete | Migration created, API endpoints updated |
+| **Phase 2: Frontend - Filtering** | ✅ Complete | Filter added to FilterPanel, SongsPage updated |
+| **Phase 3: Frontend - ReviewModal** | ✅ Complete | Approve/Reject buttons, undo toast, admin-only visibility |
+| **Phase 4: Frontend - Visual Indicators** | ✅ Complete | Row background tinting implemented |
+| **Phase 5: Import Scripts** | ⏳ Pending | Still needs implementation |
+
+### Files Modified
+- `prisma/schema.prisma` - Added approvalStatus, approvedBy, approvedById, approvedAt fields
+- `prisma/migrations/2_add_approval_workflow/migration.sql` - Migration file
+- `api/songs/index.ts` - Added approvalStatus filter
+- `api/songs/[isrc].ts` - Added approval logic with admin check
+- `api/songs/export.ts` - Default to approved-only export
+- `client/src/data/constants.ts` - Added APPROVAL_STATUSES, APPROVAL_STATUS_LABELS
+- `client/src/lib/api.ts` - Updated Song interface and GetSongsParams
+- `client/src/components/FilterPanel.tsx` - Added Approval Status dropdown
+- `client/src/components/ReviewModal.tsx` - Added Approve/Reject buttons
+- `client/src/components/SongTable.tsx` - Added row background tinting
+- `client/src/pages/SongsPage.tsx` - Added approval status state and handlers
 
 ---
 
@@ -447,17 +472,17 @@ if (existingSong?.approvalStatus === 'REJECTED') {
 
 ## 8. Testing Checklist
 
-- [ ] Admin can approve songs
-- [ ] Admin can reject songs
-- [ ] Curator cannot see approve/reject buttons
-- [ ] Curator can save metadata
-- [ ] Undo toast appears for 5 seconds after rejection
-- [ ] Undo actually reverts the rejection
-- [ ] End-of-queue switches filter to "All"
-- [ ] Export only includes approved songs by default
-- [ ] Re-import skips rejected songs
-- [ ] Row tinting displays correctly
-- [ ] Filter defaults to "Pending Review" on load
+- [x] Admin can approve songs ✅ (Implemented 2025-11-25)
+- [x] Admin can reject songs ✅ (Implemented 2025-11-25)
+- [x] Curator cannot see approve/reject buttons ✅ (Implemented 2025-11-25)
+- [x] Curator can save metadata ✅ (Implemented 2025-11-25)
+- [x] Undo toast appears for 5 seconds after rejection ✅ (Implemented 2025-11-25)
+- [x] Undo actually reverts the rejection ✅ (Implemented 2025-11-25)
+- [ ] End-of-queue switches filter to "All" (TODO: Need to implement)
+- [x] Export only includes approved songs by default ✅ (Implemented 2025-11-25)
+- [ ] Re-import skips rejected songs (TODO: Phase 5 - Import Scripts)
+- [x] Row tinting displays correctly ✅ (Implemented 2025-11-25)
+- [x] Filter defaults to "Pending Review" on load ✅ (Implemented 2025-11-25)
 
 ---
 

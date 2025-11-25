@@ -11,6 +11,7 @@
  *   - reviewStatus: Filter by reviewed (all, reviewed, unreviewed)
  *   - energy: Filter by aiEnergy
  *   - accessibility: Filter by aiAccessibility
+ *   - approvalStatus: Filter by approvalStatus (all, pending, approved, rejected)
  *   - playlistId: Filter by playlist ID
  *   - search: Search by artist, title, or ISRC (case-insensitive partial match)
  *   - sortBy: Field to sort by (createdAt, title, artist, etc.) (default: createdAt)
@@ -56,6 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const uploadBatchId = req.query.uploadBatchId as string;
     const playlistId = req.query.playlistId as string;
     const search = req.query.search as string;
+    const approvalStatus = req.query.approvalStatus as string;
     const sortBy = (req.query.sortBy as string) || 'createdAt';
     const sortOrder = (req.query.sortOrder as string) || 'desc';
 
@@ -122,6 +124,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Upload batch filter
     if (uploadBatchId && uploadBatchId !== 'all') {
       where.uploadBatchId = uploadBatchId;
+    }
+
+    // Approval status filter
+    if (approvalStatus && approvalStatus !== 'all') {
+      where.approvalStatus = approvalStatus.toUpperCase();
     }
 
     // Playlist filter (filter by songs that belong to a specific playlist)
@@ -191,6 +198,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       reviewed_by: song.reviewedBy,
       reviewed_at: song.reviewedAt?.toISOString() || null,
       curator_notes: song.curatorNotes,
+      approval_status: song.approvalStatus,
+      approved_by: song.approvedBy,
+      approved_at: song.approvedAt?.toISOString() || null,
       created_at: song.createdAt.toISOString(),
       modified_at: song.modifiedAt.toISOString(),
     }));

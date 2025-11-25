@@ -220,10 +220,25 @@ export const REVIEW_STATUSES = [
   "unreviewed",
 ] as const;
 
+export const APPROVAL_STATUSES = [
+  "all",
+  "pending",
+  "approved",
+  "rejected",
+] as const;
+
+export const APPROVAL_STATUS_LABELS: Record<string, string> = {
+  all: "All Statuses",
+  pending: "Pending Review",
+  approved: "Approved",
+  rejected: "Rejected",
+};
+
 // TypeScript types for compile-time safety
 export type EnergyLevel = (typeof ENERGY_LEVELS)[number];
 export type AccessibilityType = (typeof ACCESSIBILITY_TYPES)[number];
 export type ExplicitType = (typeof EXPLICIT_TYPES)[number];
 export type AIStatus = (typeof AI_STATUSES)[number];
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 export type Subgenre = (typeof SUBGENRES)[number];

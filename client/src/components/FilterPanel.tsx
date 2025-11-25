@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
-import { SUBGENRES, ENERGY_LEVELS, ACCESSIBILITY_TYPES, EXPLICIT_TYPES, AI_STATUSES } from '../data/constants';
+import { SUBGENRES, ENERGY_LEVELS, ACCESSIBILITY_TYPES, EXPLICIT_TYPES, AI_STATUSES, APPROVAL_STATUSES, APPROVAL_STATUS_LABELS } from '../data/constants';
 import { getUploadBatches, getPlaylists, type UploadBatch, type Playlist } from '../lib/api';
 
 interface FilterPanelProps {
@@ -22,6 +22,7 @@ interface FilterPanelProps {
   selectedExplicit: string;
   selectedBatchId: string;
   selectedPlaylistId: string;
+  selectedApprovalStatus: string;
   searchQuery: string;
   onSubgenreChange: (value: string) => void;
   onStatusChange: (value: string) => void;
@@ -31,6 +32,7 @@ interface FilterPanelProps {
   onExplicitChange: (value: string) => void;
   onBatchChange: (value: string) => void;
   onPlaylistChange: (value: string) => void;
+  onApprovalStatusChange: (value: string) => void;
   onSearchChange: (value: string) => void;
   onExport: () => void;
   onUpload: () => void;
@@ -46,6 +48,7 @@ export function FilterPanel({
   selectedExplicit,
   selectedBatchId,
   selectedPlaylistId,
+  selectedApprovalStatus,
   searchQuery,
   onSubgenreChange,
   onStatusChange,
@@ -55,6 +58,7 @@ export function FilterPanel({
   onExplicitChange,
   onBatchChange,
   onPlaylistChange,
+  onApprovalStatusChange,
   onSearchChange,
   onExport,
   onUpload,
@@ -142,7 +146,7 @@ export function FilterPanel({
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
         <div className="space-y-2">
           <Label htmlFor="subgenre" className="text-zinc-300">Subgenre</Label>
           <Select value={selectedSubgenre} onValueChange={onSubgenreChange}>
@@ -205,6 +209,26 @@ export function FilterPanel({
               <SelectItem value="reviewed" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
                 Reviewed Only
               </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="approvalStatus" className="text-zinc-300">Approval Status</Label>
+          <Select value={selectedApprovalStatus} onValueChange={onApprovalStatusChange}>
+            <SelectTrigger id="approvalStatus" className="bg-zinc-950 border-zinc-700 text-zinc-100">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-700">
+              {APPROVAL_STATUSES.map((status) => (
+                <SelectItem
+                  key={status}
+                  value={status}
+                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
+                >
+                  {APPROVAL_STATUS_LABELS[status]}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
