@@ -90,13 +90,39 @@ async function fetchSpotifyMetadata(songs) {
 /**
  * Process a single song
  */
-async function processSong(song, spotifyMetadata, batchName = null, batchId = null, playlistId = null) {
+async function processSong(song, spotifyMetadata, batchName = null, batchId = null, playlistId = null, skipExisting = true) {
   try {
     // Check if song exists before processing
-    const existingBeforeProcessing = await prisma.song.findUnique({
+    const existingSong = await prisma.song.findUnique({
       where: { isrc: song.isrc }
     });
-    const wasNew = !existingBeforeProcessing;
+    const wasNew = !existingSong;
+
+    // If song exists and skipExisting is true, just create playlist association
+    if (existingSong && skipExisting) {
+      // Create playlist association if playlistId provided
+      if (playlistId) {
+        await prisma.playlistSong.create({
+          data: {
+            playlistId: playlistId,
+            songIsrc: song.isrc,
+            wasNew: false
+          }
+        });
+      }
+
+      return {
+        success: true,
+        skipped: true,
+        isrc: song.isrc,
+        title: song.title,
+        artist: song.artist,
+        hasPreview: !!existingSong.spotifyPreviewUrl,
+        bpmTransformation: 'N/A',
+        aiStatus: existingSong.aiStatus || 'EXISTING',
+        wasNew: false,
+      };
+    }
 
     // Get Spotify metadata
     const spotifyTrack = spotifyMetadata.get(song.spotifyTrackId);
@@ -172,6 +198,7 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
 
     return {
       success: true,
+      skipped: false,
       isrc: song.isrc,
       title: song.title,
       artist: song.artist,
@@ -185,6 +212,7 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
     console.error(`  ✗ Error processing ${song.title} by ${song.artist}:`, error.message);
     return {
       success: false,
+      skipped: false,
       isrc: song.isrc,
       title: song.title,
       artist: song.artist,
@@ -197,7 +225,7 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
 /**
  * Process songs with concurrency control
  */
-async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency, playlistName = null, batchId = null, playlistId = null) {
+async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency, playlistName = null, batchId = null, playlistId = null, skipExisting = true) {
   const results = [];
 
   for (let i = 0; i < songs.length; i += concurrency) {
@@ -208,7 +236,7 @@ async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency, 
     console.log(`\nProcessing batch ${batchNumber}/${totalBatches} (songs ${i + 1}-${Math.min(i + concurrency, songs.length)})...`);
 
     const batchResults = await Promise.all(
-      batch.map(song => processSong(song, spotifyMetadata, playlistName, batchId, playlistId))
+      batch.map(song => processSong(song, spotifyMetadata, playlistName, batchId, playlistId, skipExisting))
     );
 
     results.push(...batchResults);
@@ -217,8 +245,12 @@ async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency, 
     batchResults.forEach((result, idx) => {
       const songNum = i + idx + 1;
       if (result.success) {
-        const previewIcon = result.hasPreview ? '🎵' : '⚠️';
-        console.log(`  ${previewIcon} [${songNum}/${songs.length}] ${result.artist} - ${result.title} (${result.aiStatus})`);
+        if (result.skipped) {
+          console.log(`  ⏭️ [${songNum}/${songs.length}] ${result.artist} - ${result.title} (SKIPPED - already in DB)`);
+        } else {
+          const previewIcon = result.hasPreview ? '🎵' : '⚠️';
+          console.log(`  ${previewIcon} [${songNum}/${songs.length}] ${result.artist} - ${result.title} (${result.aiStatus})`);
+        }
       } else {
         console.log(`  ✗ [${songNum}/${songs.length}] ${result.artist} - ${result.title} - ERROR: ${result.error}`);
       }
@@ -232,9 +264,9 @@ async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency, 
  * Export results to CSV
  */
 function exportResultsToCSV(results, outputPath) {
-  const header = 'Artist,Title,ISRC,AI Status,Has Preview,BPM Transformation,Error\n';
+  const header = 'Artist,Title,ISRC,AI Status,Skipped,Has Preview,BPM Transformation,Error\n';
   const rows = results.map(r =>
-    `"${r.artist}","${r.title}","${r.isrc}","${r.aiStatus || 'ERROR'}","${r.hasPreview ? 'Yes' : 'No'}","${r.bpmTransformation || 'N/A'}","${r.error || ''}"`
+    `"${r.artist}","${r.title}","${r.isrc}","${r.aiStatus || 'ERROR'}","${r.skipped ? 'Yes' : 'No'}","${r.hasPreview ? 'Yes' : 'No'}","${r.bpmTransformation || 'N/A'}","${r.error || ''}"`
   ).join('\n');
 
   fs.writeFileSync(outputPath, header + rows);
@@ -247,11 +279,13 @@ function exportResultsToCSV(results, outputPath) {
 function printSummary(results) {
   const successful = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success).length;
+  const skipped = results.filter(r => r.skipped).length;
+  const processed = results.filter(r => r.success && !r.skipped).length;
   const withPreview = results.filter(r => r.hasPreview).length;
-  const withoutPreview = results.filter(r => r.success && !r.hasPreview).length;
+  const withoutPreview = results.filter(r => r.success && !r.hasPreview && !r.skipped).length;
 
   const statusCounts = {};
-  results.forEach(r => {
+  results.filter(r => !r.skipped).forEach(r => {
     const status = r.aiStatus || 'ERROR';
     statusCounts[status] = (statusCounts[status] || 0) + 1;
   });
@@ -259,16 +293,20 @@ function printSummary(results) {
   console.log('\n' + '='.repeat(60));
   console.log('ENRICHMENT SUMMARY');
   console.log('='.repeat(60));
-  console.log(`Total songs:           ${results.length}`);
-  console.log(`Successfully processed: ${successful}`);
+  console.log(`Total songs in CSV:    ${results.length}`);
+  console.log(`Skipped (existing):    ${skipped}`);
+  console.log(`Newly processed:       ${processed}`);
   console.log(`Failed:                ${failed}`);
-  console.log(`\nSpotify Preview URLs:`);
-  console.log(`  With preview:        ${withPreview} (${Math.round(withPreview/results.length*100)}%)`);
-  console.log(`  Without preview:     ${withoutPreview} (${Math.round(withoutPreview/results.length*100)}%)`);
-  console.log(`\nAI Classification Status:`);
-  Object.entries(statusCounts).forEach(([status, count]) => {
-    console.log(`  ${status.padEnd(20)} ${count}`);
-  });
+  if (processed > 0) {
+    console.log(`\nSpotify Preview URLs (new songs):`);
+    const newWithPreview = results.filter(r => r.success && !r.skipped && r.hasPreview).length;
+    console.log(`  With preview:        ${newWithPreview} (${Math.round(newWithPreview/processed*100)}%)`);
+    console.log(`  Without preview:     ${withoutPreview} (${Math.round(withoutPreview/processed*100)}%)`);
+    console.log(`\nAI Classification Status (new songs):`);
+    Object.entries(statusCounts).forEach(([status, count]) => {
+      console.log(`  ${status.padEnd(20)} ${count}`);
+    });
+  }
   console.log('='.repeat(60));
 }
 
@@ -283,12 +321,16 @@ async function main() {
 
     // Parse options
     const options = {
-      uploadedByName: args.find(a => a.startsWith('--uploaded-by-name='))?.split('=')[1]
+      uploadedByName: args.find(a => a.startsWith('--uploaded-by-name='))?.split('=')[1],
+      skipExisting: !args.includes('--force'), // Skip existing by default, use --force to reprocess
     };
 
     if (!csvPath) {
       console.error('Error: Please provide a CSV file path');
-      console.error('Usage: node scripts/enrich-spotify-playlist.cjs "path/to/spotify-export.csv" [--uploaded-by-name=name]');
+      console.error('Usage: node scripts/enrich-spotify-playlist.cjs "path/to/spotify-export.csv" [options]');
+      console.error('Options:');
+      console.error('  --force              Reprocess songs that already exist in DB (default: skip)');
+      console.error('  --uploaded-by-name=  Name of the uploader');
       process.exit(1);
     }
 
@@ -313,6 +355,7 @@ async function main() {
     console.log(`Playlist name: ${playlistName}`);
     console.log(`Batch ID: ${batchId}`);
     console.log(`Uploaded by: ${options.uploadedByName || 'Unknown'}`);
+    console.log(`Skip existing: ${options.skipExisting ? 'Yes (use --force to reprocess)' : 'No (reprocessing all)'}`);
     console.log(`Concurrency: ${CONCURRENCY} songs at a time`);
     console.log('='.repeat(60));
 
@@ -353,7 +396,7 @@ async function main() {
 
     // Process songs
     console.log('\nStarting AI enrichment...\n');
-    const results = await processSongsWithConcurrency(songs, spotifyMetadata, CONCURRENCY, playlistName, batchId, playlist.id);
+    const results = await processSongsWithConcurrency(songs, spotifyMetadata, CONCURRENCY, playlistName, batchId, playlist.id, options.skipExisting);
 
     // Update playlist stats
     const newSongsCount = results.filter(r => r.wasNew === true).length;
