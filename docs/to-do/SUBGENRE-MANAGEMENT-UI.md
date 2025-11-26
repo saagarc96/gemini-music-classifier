@@ -1,155 +1,238 @@
-# Subgenre Management UI
+# Subgenre Management UI - Revised Implementation Plan
 
 ## Overview
 
-Admin-only UI to manage subgenres without requiring CLI access or manual git commits. Uses the existing file-based system (`data/subgenres.json`) with a form-based editor.
+Admin-only UI to manage subgenres via database storage (not file-based). This resolves the Vercel read-only filesystem limitation and provides a production-ready solution.
 
-## Timeline: ~3 days
+## Key Changes from Original Plan
 
-## Architecture Decision
+| Original Plan | Revised Plan |
+|---------------|--------------|
+| File-based (`data/subgenres.json`) | Database storage (new `Subgenre` + `Category` tables) |
+| Git commit button | Removed (not needed with DB) |
+| `requireAdmin(req)` (wrong signature) | `requireAdmin(req, res)` (matches existing pattern) |
+| `export async function GET/PUT` | Single `export default function handler` |
+| `ProtectedRoute` component | Role check in App.tsx + component-level `user?.role === 'ADMIN'` |
 
-**Approach: File-Based Form Editor**
+---
 
-- Edit `data/subgenres.json` directly via API
-- Auto-regenerate `client/src/data/constants.ts` on save
-- Optional git commit button
-- No database changes needed
-- Songs store subgenres as VARCHAR - no FK constraints to update
+## Database Schema
 
-## Implementation Plan
+Add to `prisma/schema.prisma`:
 
-### Day 1: Backend API
+```prisma
+model SubgenreCategory {
+  id         String     @id @default(cuid())
+  name       String     @unique @db.VarChar(100)
+  sortOrder  Int        @default(0) @map("sort_order")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
 
-Create `api/admin/subgenres.ts`:
+  subgenres  Subgenre[]
+
+  @@map("subgenre_categories")
+}
+
+model Subgenre {
+  id         String   @id @default(cuid())
+  name       String   @db.VarChar(100)
+  categoryId String   @map("category_id")
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  category   SubgenreCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([name])
+  @@index([categoryId])
+  @@map("subgenres")
+}
+```
+
+## Migration Script
+
+Create `scripts/migrate-subgenres-to-db.cjs` to seed database from existing `data/subgenres.json`:
+
+```javascript
+// Read data/subgenres.json
+// For each category: create SubgenreCategory
+// For each subgenre in category: create Subgenre with FK
+```
+
+---
+
+## API Endpoints
+
+### GET /api/admin/subgenres
+
+File: `api/admin/subgenres.ts`
 
 ```typescript
-import { requireAdmin } from '../middleware/auth';
-import fs from 'fs/promises';
-import path from 'path';
-import { execSync } from 'child_process';
+import { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireAdmin } from '../lib/auth.js';
+import { prisma } from '../lib/prisma.js';
 
-const SUBGENRES_PATH = path.join(process.cwd(), 'data/subgenres.json');
-
-// GET /api/admin/subgenres - Read current subgenres
-export async function GET(req: Request) {
-  await requireAdmin(req);
-  const data = await fs.readFile(SUBGENRES_PATH, 'utf-8');
-  return Response.json(JSON.parse(data));
-}
-
-// PUT /api/admin/subgenres - Update subgenres
-export async function PUT(req: Request) {
-  await requireAdmin(req);
-  const body = await req.json();
-
-  // Validate structure
-  if (!body.categories || !Array.isArray(body.categories)) {
-    return Response.json({ error: 'Invalid structure' }, { status: 400 });
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'GET') {
+    // Public read - anyone can fetch subgenres for dropdowns
+    const categories = await prisma.subgenreCategory.findMany({
+      include: { subgenres: { orderBy: { sortOrder: 'asc' } } },
+      orderBy: { sortOrder: 'asc' }
+    });
+    return res.json({ categories });
   }
 
-  // Write to file
-  await fs.writeFile(SUBGENRES_PATH, JSON.stringify(body, null, 2));
+  if (req.method === 'PUT') {
+    // Admin only - update entire structure
+    const user = await requireAdmin(req, res);
+    if (!user) return;
 
-  // Regenerate constants
-  execSync('npm run generate:constants', { cwd: process.cwd() });
-
-  return Response.json({ success: true, message: 'Subgenres updated and constants regenerated' });
-}
-
-// POST /api/admin/subgenres/commit - Optional git commit
-export async function POST(req: Request) {
-  await requireAdmin(req);
-  const { message } = await req.json();
-
-  try {
-    execSync(`git add data/subgenres.json client/src/data/constants.ts`, { cwd: process.cwd() });
-    execSync(`git commit -m "${message || 'Update subgenres'}"`, { cwd: process.cwd() });
-    execSync('git push', { cwd: process.cwd() });
-    return Response.json({ success: true, message: 'Changes committed and pushed' });
-  } catch (error) {
-    return Response.json({ error: 'Git operation failed', details: error.message }, { status: 500 });
+    const { categories } = req.body;
+    // Validate and upsert categories/subgenres
+    // Return updated structure
   }
+
+  return res.status(405).json({ error: 'Method not allowed' });
 }
 ```
 
-### Day 2: Frontend UI
+### POST /api/admin/subgenres/category
 
-Create `client/src/pages/admin/SubgenresPage.tsx`:
+File: `api/admin/subgenres/category.ts`
 
-```
-+------------------------------------------------------------------+
-|  Subgenre Management                              [Commit & Push] |
-+------------------------------------------------------------------+
-| [Pop/Rock] [Electronic] [Hip-Hop] [Jazz] [Classical] [World] ... |
-+------------------------------------------------------------------+
-|                                                                   |
-|  Pop/Rock (24 subgenres)                                         |
-|  +---------------------------------------------------------+     |
-|  | Adult Contemporary          [x]                          |     |
-|  | Alternative Rock            [x]                          |     |
-|  | Classic Rock                [x]                          |     |
-|  | Indie Pop                   [x]                          |     |
-|  | Modern Latin Pop            [x]                          |     |
-|  | ...                                                      |     |
-|  +---------------------------------------------------------+     |
-|                                                                   |
-|  [+ Add Subgenre]                                                |
-|  +---------------------------+                                   |
-|  | New subgenre name: [____] |  [Add]                           |
-|  +---------------------------+                                   |
-|                                                                   |
-|                                              [Save Changes]       |
-+------------------------------------------------------------------+
-```
+- Create new category
+- Admin only
 
-Key components:
-- Category tabs using shadcn Tabs
-- List of subgenres per category with delete (X) buttons
-- Add subgenre input field per category
-- Save Changes button (calls PUT endpoint)
-- Commit & Push button (calls POST endpoint)
+### DELETE /api/admin/subgenres/[id]
+
+File: `api/admin/subgenres/[id].ts`
+
+- Delete subgenre by ID
+- Admin only
+- Validate: warn if subgenre is in use by songs
+
+---
+
+## Frontend Components
+
+### 1. SubgenresPage (`client/src/pages/SubgenresPage.tsx`)
+
+Main admin page with:
+- Category tabs (using shadcn Tabs)
+- List of subgenres per category
+- Add subgenre input + button
+- Delete (X) buttons per subgenre
 - Unsaved changes indicator
+- Save button
 
-### Day 3: Integration & Testing
+### 2. App.tsx Route Addition
 
-1. **Add route to App.tsx:**
 ```tsx
-<Route path="/admin/subgenres" element={
-  <ProtectedRoute requiredRole="ADMIN">
-    <SubgenresPage />
-  </ProtectedRoute>
-} />
+// In the Routes section, add:
+<Route path="/admin/subgenres" element={<SubgenresPage />} />
 ```
 
-2. **Add navigation to Header.tsx:**
+Note: No ProtectedRoute wrapper needed. The page itself checks `user?.role === 'ADMIN'` and redirects or shows unauthorized message.
+
+### 3. Header.tsx Navigation
+
 ```tsx
+// Add admin link conditionally
 {user?.role === 'ADMIN' && (
-  <Link to="/admin/subgenres">Manage Subgenres</Link>
+  <Link to="/admin/subgenres" className="...">
+    Manage Subgenres
+  </Link>
 )}
 ```
 
-3. **Testing checklist:**
-- [ ] Load existing subgenres
-- [ ] Add new subgenre to category
-- [ ] Delete subgenre from category
-- [ ] Save changes (verify constants.ts updated)
-- [ ] Commit & push (verify git operations)
-- [ ] Non-admin users cannot access
-- [ ] Page refresh shows saved changes
+---
 
-## User Workflow
+## Data Sync Strategy
 
-1. Navigate to Admin > Manage Subgenres
-2. Click category tab (e.g., "World & Regional")
-3. Type new subgenre name in input field
-4. Click "Add" button
-5. Click "Save Changes" to update files
-6. (Optional) Click "Commit & Push" to deploy
+Since songs store subgenre values as VARCHAR (not FK), we need to handle the case where a subgenre is deleted but songs still reference it.
 
-## Notes
+**Decision: Block deletion if in use**
 
-- Categories are preserved from current structure (10 total)
-- Total subgenres: 180 (as of last update)
-- No database migration needed
-- Changes require Vercel redeploy to appear in production
-- The "Commit & Push" button triggers auto-deploy on Vercel
+If any songs reference a subgenre, prevent deletion with a clear error:
+> "Cannot delete 'Afro-House' - 47 songs use this subgenre. Reassign them first."
+
+This is the safest approach - no orphaned data, admin must consciously handle affected songs.
+
+---
+
+## File & Backend Sync Strategy
+
+**Decision: Database is source of truth, JSON is auto-generated cache**
+
+The flow:
+1. **Database** = single source of truth (edited via admin UI)
+2. **`data/subgenres.json`** = auto-generated from DB when admin saves
+3. **`client/src/data/constants.ts`** = auto-generated from DB when admin saves
+4. **Backend scripts** (`subgenre-loader.cjs`) = read JSON (unchanged, works as before)
+5. **Frontend components** = fetch from API, fall back to constants.ts
+
+**On Admin Save:**
+The PUT endpoint regenerates both files after updating DB:
+```typescript
+// After DB update succeeds:
+await regenerateSubgenreFiles(); // writes JSON + constants.ts
+```
+
+This gives us:
+- Single source of truth (DB)
+- Backend enrichment scripts work unchanged (read JSON)
+- Frontend has fresh data from API with constants.ts fallback
+- No manual file editing ever needed
+
+---
+
+## Implementation Steps
+
+### Phase 1: Database Setup
+1. Add Prisma schema for `SubgenreCategory` and `Subgenre` models
+2. Run migration: `npm run prisma:migrate`
+3. Create seed script to migrate data from `data/subgenres.json`
+4. Run seed script
+
+### Phase 2: Backend API
+1. Create `api/admin/subgenres.ts` - GET (public) and PUT (admin)
+2. Create `api/admin/subgenres/[id].ts` - DELETE (admin)
+3. Add usage check query (count songs using subgenre)
+
+### Phase 3: Frontend Page
+1. Create `SubgenresPage.tsx` with category tabs UI
+2. Add route to `App.tsx`
+3. Add navigation link to `Header.tsx`
+4. Implement add/delete/save functionality
+
+### Phase 4: Integration
+1. Update FilterPanel to fetch subgenres from API
+2. Update ReviewModal to fetch subgenres from API
+3. Add fallback to constants.ts for reliability
+4. Test full workflow
+
+---
+
+## Critical Files to Modify
+
+| File | Changes |
+|------|---------|
+| `prisma/schema.prisma` | Add SubgenreCategory and Subgenre models |
+| `api/admin/subgenres.ts` | New file - GET/PUT endpoints |
+| `api/admin/subgenres/[id].ts` | New file - DELETE endpoint |
+| `client/src/pages/SubgenresPage.tsx` | New file - Admin UI page |
+| `client/src/App.tsx` | Add route for /admin/subgenres |
+| `client/src/components/Header.tsx` | Add admin nav link |
+| `client/src/components/FilterPanel.tsx` | Fetch subgenres from API |
+| `client/src/components/ReviewModal.tsx` | Fetch subgenres from API |
+| `scripts/migrate-subgenres-to-db.cjs` | New file - Migration script |
+
+---
+
+## Validation Rules
+
+When adding/updating subgenres:
+- Name cannot be empty or whitespace-only
+- Name must be unique (case-insensitive check)
+- No leading/trailing whitespace (auto-trim)
+- Category name cannot be empty
