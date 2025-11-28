@@ -12,12 +12,17 @@ interface ExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentFilters: {
-    subgenre?: string;
+    // Multi-select filters (arrays)
+    subgenres?: string[];
+    energies?: string[];
+    accessibilities?: string[];
+    explicits?: string[];
+    // Single-select filters
     status?: string;
     reviewStatus?: string;
-    energy?: string;
-    accessibility?: string;
-    explicit?: string;
+    approvalStatus?: string;
+    uploadBatchId?: string;
+    playlistId?: string;
   };
   totalSongs: number;
   selectedIsrcs: Set<string>;
@@ -51,16 +56,25 @@ export function ExportModal({ isOpen, onClose, currentFilters, totalSongs, selec
   const loadPreview = async () => {
     setIsLoadingPreview(true);
     try {
-      const params = new URLSearchParams({
-        ...(selectedIsrcs.size > 0 ? {} : currentFilters), // Use filters only if no selection
-        preview: 'true',
-        includeAccessibility: includeAccessibility.toString(),
-        includeExplicit: includeExplicit.toString(),
-      });
+      const params = new URLSearchParams();
+      params.set('preview', 'true');
+      params.set('includeAccessibility', includeAccessibility.toString());
+      params.set('includeExplicit', includeExplicit.toString());
 
-      // If songs are selected, export only selected ISRCs
+      // If songs are selected, export only selected ISRCs (ignore other filters)
       if (selectedIsrcs.size > 0) {
         params.set('isrcs', Array.from(selectedIsrcs).join(','));
+      } else {
+        // Add filter params (handle arrays by joining with comma)
+        Object.entries(currentFilters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            if (Array.isArray(value) && value.length > 0) {
+              params.set(key, value.join(','));
+            } else if (typeof value === 'string' && value !== '') {
+              params.set(key, value);
+            }
+          }
+        });
       }
 
       if (playlistName.trim()) {
@@ -86,15 +100,24 @@ export function ExportModal({ isOpen, onClose, currentFilters, totalSongs, selec
   const handleDownload = async () => {
     setIsDownloading(true);
     try {
-      const params = new URLSearchParams({
-        ...(selectedIsrcs.size > 0 ? {} : currentFilters), // Use filters only if no selection
-        includeAccessibility: includeAccessibility.toString(),
-        includeExplicit: includeExplicit.toString(),
-      });
+      const params = new URLSearchParams();
+      params.set('includeAccessibility', includeAccessibility.toString());
+      params.set('includeExplicit', includeExplicit.toString());
 
-      // If songs are selected, export only selected ISRCs
+      // If songs are selected, export only selected ISRCs (ignore other filters)
       if (selectedIsrcs.size > 0) {
         params.set('isrcs', Array.from(selectedIsrcs).join(','));
+      } else {
+        // Add filter params (handle arrays by joining with comma)
+        Object.entries(currentFilters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            if (Array.isArray(value) && value.length > 0) {
+              params.set(key, value.join(','));
+            } else if (typeof value === 'string' && value !== '') {
+              params.set(key, value);
+            }
+          }
+        });
       }
 
       if (playlistName.trim()) {

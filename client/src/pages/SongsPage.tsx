@@ -27,13 +27,15 @@ export default function SongsPage() {
   const [loading, setLoading] = useState(false);
 
   // Filter states
-  const [selectedSubgenre, setSelectedSubgenre] = useState('all');
+  // Multi-select filters (arrays)
+  const [selectedSubgenres, setSelectedSubgenres] = useState<string[]>([]);
+  const [selectedEnergies, setSelectedEnergies] = useState<string[]>([]);
+  const [selectedAccessibilities, setSelectedAccessibilities] = useState<string[]>([]);
+  const [selectedExplicits, setSelectedExplicits] = useState<string[]>([]);
+  // Single-select filters (strings)
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedReviewStatus, setSelectedReviewStatus] = useState('all');
   const [selectedApprovalStatus, setSelectedApprovalStatus] = useState('active'); // Default to "Active" (non-rejected songs)
-  const [selectedEnergy, setSelectedEnergy] = useState('all');
-  const [selectedAccessibility, setSelectedAccessibility] = useState('all');
-  const [selectedExplicit, setSelectedExplicit] = useState('all');
   const [selectedBatchId, setSelectedBatchId] = useState('all');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,12 +56,12 @@ export default function SongsPage() {
   // Clear selections when filters change
   useEffect(() => {
     setSelectedIsrcs(new Set());
-  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedApprovalStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, selectedPlaylistId, searchQuery]);
+  }, [selectedSubgenres, selectedStatus, selectedReviewStatus, selectedApprovalStatus, selectedEnergies, selectedAccessibilities, selectedExplicits, selectedBatchId, selectedPlaylistId, searchQuery]);
 
   // Fetch songs when filters or page changes
   useEffect(() => {
     fetchSongs();
-  }, [selectedSubgenre, selectedStatus, selectedReviewStatus, selectedApprovalStatus, selectedEnergy, selectedAccessibility, selectedExplicit, selectedBatchId, selectedPlaylistId, searchQuery, currentPage, sortBy, sortOrder, limit]);
+  }, [selectedSubgenres, selectedStatus, selectedReviewStatus, selectedApprovalStatus, selectedEnergies, selectedAccessibilities, selectedExplicits, selectedBatchId, selectedPlaylistId, searchQuery, currentPage, sortBy, sortOrder, limit]);
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -67,13 +69,13 @@ export default function SongsPage() {
       const response = await getSongs({
         page: currentPage,
         limit,
-        subgenre: selectedSubgenre !== 'all' ? selectedSubgenre : undefined,
+        subgenres: selectedSubgenres.length > 0 ? selectedSubgenres : undefined,
         status: selectedStatus !== 'all' ? selectedStatus : undefined,
         reviewStatus: selectedReviewStatus !== 'all' ? selectedReviewStatus : undefined,
         approvalStatus: selectedApprovalStatus !== 'all' ? selectedApprovalStatus : undefined,
-        energy: selectedEnergy !== 'all' ? selectedEnergy : undefined,
-        accessibility: selectedAccessibility !== 'all' ? selectedAccessibility : undefined,
-        explicit: selectedExplicit !== 'all' ? selectedExplicit : undefined,
+        energies: selectedEnergies.length > 0 ? selectedEnergies : undefined,
+        accessibilities: selectedAccessibilities.length > 0 ? selectedAccessibilities : undefined,
+        explicits: selectedExplicits.length > 0 ? selectedExplicits : undefined,
         uploadBatchId: selectedBatchId !== 'all' ? selectedBatchId : undefined,
         playlistId: selectedPlaylistId !== 'all' ? selectedPlaylistId : undefined,
         search: searchQuery.trim() || undefined,
@@ -243,18 +245,18 @@ export default function SongsPage() {
       {/* Main Content */}
       <main className="flex-1 overflow-auto px-6 py-4 space-y-4">
         <FilterPanel
-          selectedSubgenre={selectedSubgenre}
+          selectedSubgenres={selectedSubgenres}
           selectedStatus={selectedStatus}
           selectedReviewStatus={selectedReviewStatus}
           selectedApprovalStatus={selectedApprovalStatus}
-          selectedEnergy={selectedEnergy}
-          selectedAccessibility={selectedAccessibility}
-          selectedExplicit={selectedExplicit}
+          selectedEnergies={selectedEnergies}
+          selectedAccessibilities={selectedAccessibilities}
+          selectedExplicits={selectedExplicits}
           selectedBatchId={selectedBatchId}
           selectedPlaylistId={selectedPlaylistId}
           searchQuery={searchQuery}
-          onSubgenreChange={(value) => {
-            setSelectedSubgenre(value);
+          onSubgenresChange={(values) => {
+            setSelectedSubgenres(values);
             setCurrentPage(1); // Reset to page 1 on filter change
           }}
           onStatusChange={(value) => {
@@ -269,16 +271,16 @@ export default function SongsPage() {
             setSelectedApprovalStatus(value);
             setCurrentPage(1);
           }}
-          onEnergyChange={(value) => {
-            setSelectedEnergy(value);
+          onEnergiesChange={(values) => {
+            setSelectedEnergies(values);
             setCurrentPage(1);
           }}
-          onAccessibilityChange={(value) => {
-            setSelectedAccessibility(value);
+          onAccessibilitiesChange={(values) => {
+            setSelectedAccessibilities(values);
             setCurrentPage(1);
           }}
-          onExplicitChange={(value) => {
-            setSelectedExplicit(value);
+          onExplicitsChange={(values) => {
+            setSelectedExplicits(values);
             setCurrentPage(1);
           }}
           onBatchChange={(value) => {
@@ -412,13 +414,13 @@ export default function SongsPage() {
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         currentFilters={{
-          subgenre: selectedSubgenre !== 'all' ? selectedSubgenre : undefined,
+          subgenres: selectedSubgenres.length > 0 ? selectedSubgenres : undefined,
           status: selectedStatus !== 'all' ? selectedStatus : undefined,
           reviewStatus: selectedReviewStatus !== 'all' ? selectedReviewStatus : undefined,
           approvalStatus: selectedApprovalStatus !== 'all' ? selectedApprovalStatus : undefined,
-          energy: selectedEnergy !== 'all' ? selectedEnergy : undefined,
-          accessibility: selectedAccessibility !== 'all' ? selectedAccessibility : undefined,
-          explicit: selectedExplicit !== 'all' ? selectedExplicit : undefined,
+          energies: selectedEnergies.length > 0 ? selectedEnergies : undefined,
+          accessibilities: selectedAccessibilities.length > 0 ? selectedAccessibilities : undefined,
+          explicits: selectedExplicits.length > 0 ? selectedExplicits : undefined,
           uploadBatchId: selectedBatchId !== 'all' ? selectedBatchId : undefined,
           playlistId: selectedPlaylistId !== 'all' ? selectedPlaylistId : undefined,
         }}
