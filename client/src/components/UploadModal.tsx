@@ -328,7 +328,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl w-[90vw]">
         {/* IDLE STATE */}
         {uploadState === 'idle' && (
           <>
@@ -493,11 +493,11 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
                       style={{ animationDelay: `${i * 50}ms` }}
                     >
                       <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                      <span className="truncate flex-1 text-zinc-300">
+                      <span className="truncate text-zinc-300 min-w-0" style={{ maxWidth: 'calc(100% - 180px)' }}>
                         {song.artist} – {song.title}
                       </span>
                       {song.aiSubgenre1 && (
-                        <span className="px-2 py-0.5 bg-zinc-800 rounded text-xs text-zinc-400 flex-shrink-0">
+                        <span className="ml-auto px-2 py-0.5 bg-zinc-800 rounded text-xs text-zinc-400 whitespace-nowrap">
                           {song.aiSubgenre1}
                         </span>
                       )}
