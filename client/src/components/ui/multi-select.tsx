@@ -148,11 +148,11 @@ export function MultiSelect({
                       className={cn(
                         "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border",
                         isSelected
-                          ? "bg-blue-600 border-blue-600 text-white"
+                          ? "bg-blue-600 border-blue-600"
                           : "border-zinc-600 bg-transparent"
                       )}
                     >
-                      {isSelected && <CheckIcon className="h-3 w-3" />}
+                      {isSelected && <CheckIcon className="h-3 w-3 stroke-[4] text-white" style={{ filter: 'drop-shadow(0 0 1px white)' }} />}
                     </div>
                     <span className="truncate">{option.label}</span>
                   </CommandItem>
