@@ -48,13 +48,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit as string) || 50));
     const offset = (page - 1) * limit;
 
-    const subgenre = req.query.subgenre as string;
+    // Multi-select filters (comma-separated values)
+    const subgenresParam = req.query.subgenres as string;
+    const energiesParam = req.query.energies as string;
+    const accessibilitiesParam = req.query.accessibilities as string;
+    const explicitsParam = req.query.explicits as string;
+
+    // Parse comma-separated values into arrays with sanitization
+    const MAX_FILTER_VALUES = 50;
+    const parseFilterArray = (param: string | undefined): string[] => {
+      if (!param) return [];
+      return param.split(',').map(v => v.trim()).filter(Boolean).slice(0, MAX_FILTER_VALUES);
+    };
+
+    const subgenres = parseFilterArray(subgenresParam);
+    const energies = parseFilterArray(energiesParam);
+    const accessibilities = parseFilterArray(accessibilitiesParam);
+    const explicits = parseFilterArray(explicitsParam);
+
+    // Single-select filters
     const status = req.query.status as string;
     const reviewStatus = req.query.reviewStatus as string;
     const approvalStatus = req.query.approvalStatus as string;
-    const energy = req.query.energy as string;
-    const accessibility = req.query.accessibility as string;
-    const explicit = req.query.explicit as string;
     const uploadBatchId = req.query.uploadBatchId as string;
     const playlistId = req.query.playlistId as string;
     const search = req.query.search as string;
@@ -65,13 +80,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const where: any = {};
     const andConditions: any[] = [];
 
-    // Subgenre filter (searches across all 3 subgenre columns with case-insensitive matching)
-    if (subgenre && subgenre !== 'all') {
+    // Subgenre filter (multi-select: searches across all 3 subgenre columns)
+    // A song matches if ANY of its subgenres match ANY of the selected subgenres
+    // Note: Database values are Title Case per CLAUDE.md, so we match exactly
+    if (subgenres.length > 0) {
       andConditions.push({
         OR: [
-          { aiSubgenre1: { equals: subgenre, mode: 'insensitive' } },
-          { aiSubgenre2: { equals: subgenre, mode: 'insensitive' } },
-          { aiSubgenre3: { equals: subgenre, mode: 'insensitive' } },
+          { aiSubgenre1: { in: subgenres } },
+          { aiSubgenre2: { in: subgenres } },
+          { aiSubgenre3: { in: subgenres } },
         ]
       });
     }
@@ -116,19 +133,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Energy filter
-    if (energy && energy !== 'all') {
-      where.aiEnergy = energy;
+    // Energy filter (multi-select)
+    if (energies.length > 0) {
+      where.aiEnergy = { in: energies };
     }
 
-    // Accessibility filter
-    if (accessibility && accessibility !== 'all') {
-      where.aiAccessibility = accessibility;
+    // Accessibility filter (multi-select)
+    if (accessibilities.length > 0) {
+      where.aiAccessibility = { in: accessibilities };
     }
 
-    // Explicit content filter
-    if (explicit && explicit !== 'all') {
-      where.aiExplicit = explicit;
+    // Explicit content filter (multi-select)
+    if (explicits.length > 0) {
+      where.aiExplicit = { in: explicits };
     }
 
     // Upload batch filter

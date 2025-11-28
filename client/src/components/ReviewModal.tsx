@@ -478,7 +478,7 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueu
             <Button
               onClick={onClose}
               variant="outline"
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+              className="border-zinc-600 bg-zinc-800 text-zinc-100 hover:bg-zinc-700 hover:text-white"
             >
               Cancel
             </Button>
@@ -486,7 +486,7 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueu
               <Button
                 onClick={handleSave}
                 variant="outline"
-                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                className="border-zinc-600 bg-zinc-800 text-zinc-100 hover:bg-zinc-700 hover:text-white"
               >
                 Save
               </Button>

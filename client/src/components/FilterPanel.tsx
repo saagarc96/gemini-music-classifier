@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { FileDown, Upload } from 'lucide-react';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
@@ -10,27 +10,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
+import { MultiSelect } from './ui/multi-select';
 import { SUBGENRES, ENERGY_LEVELS, ACCESSIBILITY_TYPES, EXPLICIT_TYPES, AI_STATUSES, APPROVAL_STATUSES, APPROVAL_STATUS_LABELS } from '../data/constants';
 import { getUploadBatches, getPlaylists, type UploadBatch, type Playlist } from '../lib/api';
 
 interface FilterPanelProps {
-  selectedSubgenre: string;
+  // Multi-select filters (arrays)
+  selectedSubgenres: string[];
+  selectedEnergies: string[];
+  selectedAccessibilities: string[];
+  selectedExplicits: string[];
+  // Single-select filters (strings)
   selectedStatus: string;
   selectedReviewStatus: string;
   selectedApprovalStatus: string;
-  selectedEnergy: string;
-  selectedAccessibility: string;
-  selectedExplicit: string;
   selectedBatchId: string;
   selectedPlaylistId: string;
   searchQuery: string;
-  onSubgenreChange: (value: string) => void;
+  // Multi-select handlers
+  onSubgenresChange: (values: string[]) => void;
+  onEnergiesChange: (values: string[]) => void;
+  onAccessibilitiesChange: (values: string[]) => void;
+  onExplicitsChange: (values: string[]) => void;
+  // Single-select handlers
   onStatusChange: (value: string) => void;
   onReviewStatusChange: (value: string) => void;
   onApprovalStatusChange: (value: string) => void;
-  onEnergyChange: (value: string) => void;
-  onAccessibilityChange: (value: string) => void;
-  onExplicitChange: (value: string) => void;
   onBatchChange: (value: string) => void;
   onPlaylistChange: (value: string) => void;
   onSearchChange: (value: string) => void;
@@ -40,23 +45,23 @@ interface FilterPanelProps {
 }
 
 export function FilterPanel({
-  selectedSubgenre,
+  selectedSubgenres,
+  selectedEnergies,
+  selectedAccessibilities,
+  selectedExplicits,
   selectedStatus,
   selectedReviewStatus,
   selectedApprovalStatus,
-  selectedEnergy,
-  selectedAccessibility,
-  selectedExplicit,
   selectedBatchId,
   selectedPlaylistId,
   searchQuery,
-  onSubgenreChange,
+  onSubgenresChange,
+  onEnergiesChange,
+  onAccessibilitiesChange,
+  onExplicitsChange,
   onStatusChange,
   onReviewStatusChange,
   onApprovalStatusChange,
-  onEnergyChange,
-  onAccessibilityChange,
-  onExplicitChange,
   onBatchChange,
   onPlaylistChange,
   onSearchChange,
@@ -107,6 +112,27 @@ export function FilterPanel({
     });
   }
 
+  // Create options for multi-select components
+  const subgenreOptions = useMemo(
+    () => SUBGENRES.map((genre) => ({ value: genre, label: genre })),
+    []
+  );
+
+  const energyOptions = useMemo(
+    () => ENERGY_LEVELS.map((level) => ({ value: level, label: level })),
+    []
+  );
+
+  const accessibilityOptions = useMemo(
+    () => ACCESSIBILITY_TYPES.map((type) => ({ value: type, label: type })),
+    []
+  );
+
+  const explicitOptions = useMemo(
+    () => EXPLICIT_TYPES.map((type) => ({ value: type, label: type })),
+    []
+  );
+
   return (
     <div className="bg-zinc-900 rounded-lg p-6 border border-zinc-700">
       <div className="flex items-center justify-between mb-6">
@@ -149,25 +175,13 @@ export function FilterPanel({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
         <div className="space-y-2">
           <Label htmlFor="subgenre" className="text-zinc-300">Subgenre</Label>
-          <Select value={selectedSubgenre} onValueChange={onSubgenreChange}>
-            <SelectTrigger id="subgenre" className="bg-zinc-950 border-zinc-700 text-zinc-100">
-              <SelectValue placeholder="All subgenres" />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-700 max-h-80">
-              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
-                All Subgenres
-              </SelectItem>
-              {SUBGENRES.map((genre) => (
-                <SelectItem
-                  key={genre}
-                  value={genre}
-                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
-                >
-                  {genre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            options={subgenreOptions}
+            selected={selectedSubgenres}
+            onChange={onSubgenresChange}
+            placeholder="All subgenres"
+            searchPlaceholder="Search subgenres..."
+          />
         </div>
 
         <div className="space-y-2">
@@ -235,71 +249,35 @@ export function FilterPanel({
 
         <div className="space-y-2">
           <Label htmlFor="energy" className="text-zinc-300">Energy</Label>
-          <Select value={selectedEnergy} onValueChange={onEnergyChange}>
-            <SelectTrigger id="energy" className="bg-zinc-950 border-zinc-700 text-zinc-100">
-              <SelectValue placeholder="All energy levels" />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-700">
-              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
-                All Energy Levels
-              </SelectItem>
-              {ENERGY_LEVELS.map((level) => (
-                <SelectItem
-                  key={level}
-                  value={level}
-                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
-                >
-                  {level}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            options={energyOptions}
+            selected={selectedEnergies}
+            onChange={onEnergiesChange}
+            placeholder="All energy levels"
+            searchPlaceholder="Search energy..."
+          />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="accessibility" className="text-zinc-300">Accessibility</Label>
-          <Select value={selectedAccessibility} onValueChange={onAccessibilityChange}>
-            <SelectTrigger id="accessibility" className="bg-zinc-950 border-zinc-700 text-zinc-100">
-              <SelectValue placeholder="All" />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-700">
-              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
-                All
-              </SelectItem>
-              {ACCESSIBILITY_TYPES.map((type) => (
-                <SelectItem
-                  key={type}
-                  value={type}
-                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
-                >
-                  {type}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            options={accessibilityOptions}
+            selected={selectedAccessibilities}
+            onChange={onAccessibilitiesChange}
+            placeholder="All"
+            searchPlaceholder="Search accessibility..."
+          />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="explicit" className="text-zinc-300">Explicit Content</Label>
-          <Select value={selectedExplicit} onValueChange={onExplicitChange}>
-            <SelectTrigger id="explicit" className="bg-zinc-950 border-zinc-700 text-zinc-100">
-              <SelectValue placeholder="All" />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-700">
-              <SelectItem value="all" className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100">
-                All
-              </SelectItem>
-              {EXPLICIT_TYPES.map((type) => (
-                <SelectItem
-                  key={type}
-                  value={type}
-                  className="text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100"
-                >
-                  {type}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            options={explicitOptions}
+            selected={selectedExplicits}
+            onChange={onExplicitsChange}
+            placeholder="All"
+            searchPlaceholder="Search explicit..."
+          />
         </div>
 
         <div className="space-y-2">

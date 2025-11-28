@@ -71,13 +71,15 @@ export interface Playlist {
 export interface GetSongsParams {
   page?: number;
   limit?: number;
-  subgenre?: string;
+  // Multi-select filters (arrays)
+  subgenres?: string[];
+  energies?: string[];
+  accessibilities?: string[];
+  explicits?: string[];
+  // Single-select filters (strings)
   status?: string;
   reviewStatus?: string;
   approvalStatus?: string;
-  energy?: string;
-  accessibility?: string;
-  explicit?: string;
   uploadBatchId?: string;
   playlistId?: string;
   search?: string;
@@ -105,7 +107,14 @@ export async function getSongs(params: GetSongsParams = {}): Promise<PaginatedRe
 
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '' && value !== 'all') {
-      query.append(key, String(value));
+      // Handle array values (multi-select filters) - join with comma
+      if (Array.isArray(value)) {
+        if (value.length > 0) {
+          query.append(key, value.join(','));
+        }
+      } else {
+        query.append(key, String(value));
+      }
     }
   });
 
