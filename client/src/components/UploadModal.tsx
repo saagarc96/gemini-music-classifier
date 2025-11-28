@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react';
-import { Upload, X, CheckCircle, XCircle, Loader2, Music, SkipForward, AlertTriangle } from 'lucide-react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { Upload, X, CheckCircle, XCircle, Loader2, FileMusic, ChevronDown, ChevronRight, SkipForward, AlertTriangle } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   Dialog,
@@ -7,8 +7,14 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from './ui/dialog';
 import { Progress } from './ui/progress';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from './ui/collapsible';
 import { toast } from 'sonner';
 
 interface UploadResult {
@@ -22,7 +28,14 @@ interface UploadResult {
     errors: number;
   };
   results: {
-    imported: Array<any>;
+    imported: Array<{
+      isrc: string;
+      title: string;
+      artist: string;
+      aiEnergy?: string;
+      aiAccessibility?: string;
+      aiSubgenre1?: string;
+    }>;
     skipped: Array<{
       isrc: string;
       title: string;
@@ -48,11 +61,39 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadState, setUploadState] = useState<UploadState>('idle');
-  const [csvPreview, setCsvPreview] = useState<string[][]>([]);
+  const [songCount, setSongCount] = useState(0);
   const [validationError, setValidationError] = useState<string>('');
   const [result, setResult] = useState<UploadResult | null>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [batchId, setBatchId] = useState<string | null>(null);
+  const [displayedSongs, setDisplayedSongs] = useState<UploadResult['results']['imported']>([]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const feedRef = useRef<HTMLDivElement>(null);
+
+  // Animate songs into the feed during upload simulation
+  useEffect(() => {
+    if (uploadState === 'complete' && result) {
+      // Stagger in the imported songs for visual feedback
+      const songs = result.results.imported;
+      let index = 0;
+      setDisplayedSongs([]);
+
+      const interval = setInterval(() => {
+        if (index < songs.length && index < 10) { // Show max 10 in the feed
+          setDisplayedSongs(prev => [...prev, songs[index]]);
+          index++;
+          // Auto-scroll to bottom
+          if (feedRef.current) {
+            feedRef.current.scrollTop = feedRef.current.scrollHeight;
+          }
+        } else {
+          clearInterval(interval);
+        }
+      }, 80);
+
+      return () => clearInterval(interval);
+    }
+  }, [uploadState, result]);
 
   // Poll for progress during upload
   useEffect(() => {
@@ -89,13 +130,11 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
   const validateCSV = async (file: File): Promise<boolean> => {
     setValidationError('');
 
-    // Check file type
     if (!file.name.endsWith('.csv')) {
       setValidationError('Please upload a CSV file');
       return false;
     }
 
-    // Read file content
     const text = await file.text();
     const lines = text.split('\n').filter(line => line.trim());
 
@@ -104,7 +143,6 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
       return false;
     }
 
-    // Parse header
     const header = lines[0].toLowerCase();
     const hasTitle = header.includes('title') || header.includes('song');
     if (!header.includes('artist') || !hasTitle) {
@@ -112,25 +150,18 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
       return false;
     }
 
-    // Check song limit (250 max, excluding header)
-    const songCount = lines.length - 1;
-    if (songCount > 250) {
-      setValidationError(`Too many songs: ${songCount} (maximum 250 songs per upload)`);
+    const count = lines.length - 1;
+    if (count > 250) {
+      setValidationError(`Too many songs: ${count} (maximum 250)`);
       return false;
     }
 
-    if (songCount === 0) {
-      setValidationError('CSV contains no songs (only header row)');
+    if (count === 0) {
+      setValidationError('CSV contains no songs');
       return false;
     }
 
-    // Generate preview (first 5 rows)
-    const preview = lines.slice(0, 6).map(line => {
-      // Simple CSV parsing (handles basic cases)
-      return line.split(',').map(cell => cell.trim());
-    });
-    setCsvPreview(preview);
-
+    setSongCount(count);
     return true;
   };
 
@@ -158,11 +189,17 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
     }
   };
 
+  const clearFile = () => {
+    setSelectedFile(null);
+    setSongCount(0);
+    setValidationError('');
+  };
+
   const handleUpload = async () => {
     if (!selectedFile) return;
 
     setUploadState('uploading');
-    setProgress({ current: 0, total: csvPreview.length - 1 }); // Estimate from preview
+    setProgress({ current: 0, total: songCount });
 
     try {
       const formData = new FormData();
@@ -181,6 +218,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
       const uploadResult: UploadResult = await response.json();
       setBatchId(uploadResult.batchId);
       setResult(uploadResult);
+      setProgress({ current: uploadResult.summary.total, total: uploadResult.summary.total });
       setUploadState('complete');
 
       toast.success(
@@ -196,16 +234,18 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
 
   const handleClose = () => {
     setSelectedFile(null);
-    setCsvPreview([]);
+    setSongCount(0);
     setValidationError('');
     setResult(null);
     setUploadState('idle');
     setProgress({ current: 0, total: 0 });
     setBatchId(null);
+    setDisplayedSongs([]);
+    setDetailsOpen(false);
     onOpenChange(false);
   };
 
-  const handleViewSongs = () => {
+  const handleViewInLibrary = () => {
     if (result && onUploadComplete) {
       onUploadComplete(result);
     }
@@ -214,165 +254,54 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
 
   const handleUploadAnother = () => {
     setSelectedFile(null);
-    setCsvPreview([]);
+    setSongCount(0);
     setResult(null);
     setUploadState('idle');
     setProgress({ current: 0, total: 0 });
     setBatchId(null);
+    setDisplayedSongs([]);
+    setDetailsOpen(false);
   };
+
+  const playlistName = selectedFile?.name.replace(/\.csv$/i, '') || 'Playlist';
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-7xl w-[95vw] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl">Upload CSV</DialogTitle>
-          <DialogDescription className="text-base">
-            Upload a CSV file with songs to enrich and add to the database (maximum 250 songs)
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-lg">
+        {/* IDLE STATE */}
+        {uploadState === 'idle' && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Upload Playlist</DialogTitle>
+              <DialogDescription>
+                Add songs from a CSV file (max 250 songs)
+              </DialogDescription>
+            </DialogHeader>
 
-        <div className="space-y-6 mt-4">
-          {/* Results View */}
-          {uploadState === 'complete' && result && (
-            <div className="space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-4 py-4">
+              {/* Drop Zone or File Preview */}
+              {!selectedFile ? (
                 <div
-                  className="p-4 rounded-lg text-center border"
-                  style={{ backgroundColor: '#14532d', borderColor: '#22c55e' }}
+                  className={`
+                    border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200
+                    ${dragActive
+                      ? 'border-blue-500 bg-blue-500/5'
+                      : validationError
+                      ? 'border-red-500/50'
+                      : 'border-zinc-700 hover:border-zinc-600'
+                    }
+                  `}
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
                 >
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <Music className="h-5 w-5" style={{ color: '#22c55e' }} />
-                  </div>
-                  <div className="text-3xl font-bold" style={{ color: '#22c55e' }}>
-                    {result.summary.imported}
-                  </div>
-                  <div className="text-sm" style={{ color: '#4ade80' }}>Imported</div>
-                </div>
-                <div
-                  className="p-4 rounded-lg text-center border"
-                  style={{ backgroundColor: '#1e3a5f', borderColor: '#3b82f6' }}
-                >
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <SkipForward className="h-5 w-5" style={{ color: '#3b82f6' }} />
-                  </div>
-                  <div className="text-3xl font-bold" style={{ color: '#3b82f6' }}>
-                    {result.summary.skipped}
-                  </div>
-                  <div className="text-sm" style={{ color: '#60a5fa' }}>Already Exist</div>
-                </div>
-                <div
-                  className="p-4 rounded-lg text-center border"
-                  style={{ backgroundColor: '#7f1d1d', borderColor: '#ef4444' }}
-                >
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <AlertTriangle className="h-5 w-5" style={{ color: '#ef4444' }} />
-                  </div>
-                  <div className="text-3xl font-bold" style={{ color: '#ef4444' }}>
-                    {result.summary.errors}
-                  </div>
-                  <div className="text-sm" style={{ color: '#f87171' }}>Errors</div>
-                </div>
-              </div>
-
-              {/* Playlist Info */}
-              <div className="p-4 rounded-lg border border-zinc-700 bg-zinc-800/50">
-                <p className="text-sm text-zinc-400">
-                  Created playlist: <span className="font-medium text-zinc-200">{result.playlistName}</span>
-                </p>
-                <p className="text-xs text-zinc-500 mt-1">
-                  You can filter by this playlist in the main view
-                </p>
-              </div>
-
-              {/* Error Details (if any) */}
-              {result.summary.errors > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-red-400">Error Details:</p>
-                  <div className="max-h-32 overflow-y-auto rounded-lg border border-red-900 bg-red-950/30 p-3">
-                    {result.results.errors.map((err, i) => (
-                      <p key={i} className="text-xs text-red-300">
-                        • {err.artist} - {err.title}: {err.error}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="flex gap-3">
-                <Button
-                  onClick={handleViewSongs}
-                  className="flex-1"
-                  style={{ backgroundColor: '#2563eb' }}
-                >
-                  View Imported Songs
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleUploadAnother}
-                >
-                  Upload Another
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Uploading State with Progress */}
-          {uploadState === 'uploading' && (
-            <div className="space-y-4 p-6">
-              <div className="flex items-center gap-3">
-                <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                <span className="text-sm font-medium">
-                  {progress.total > 0
-                    ? `Processing ${progress.current} of ${progress.total} songs...`
-                    : 'Starting upload...'
-                  }
-                </span>
-              </div>
-
-              {progress.total > 0 && (
-                <>
-                  <Progress
-                    value={(progress.current / progress.total) * 100}
-                    className="h-2"
-                  />
-                  <p className="text-xs text-muted-foreground text-center">
-                    {Math.round((progress.current / progress.total) * 100)}% complete
-                  </p>
-                </>
-              )}
-
-              <p className="text-xs text-zinc-500 text-center">
-                This may take several minutes depending on the number of songs
-              </p>
-            </div>
-          )}
-
-          {/* Idle State - File Upload */}
-          {uploadState === 'idle' && (
-            <>
-              {/* File Upload Area */}
-              <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                  dragActive
-                    ? 'border-primary bg-primary/5'
-                    : validationError
-                    ? 'border-destructive'
-                    : 'border-muted-foreground/25'
-                }`}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-              >
-                <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
+                  <Upload className="mx-auto h-10 w-10 text-zinc-500 mb-3" />
+                  <p className="text-sm text-zinc-400 mb-3">
                     Drag and drop your CSV file here, or
                   </p>
                   <label htmlFor="file-upload">
-                    <Button variant="outline" className="cursor-pointer" asChild>
+                    <Button variant="outline" size="sm" className="cursor-pointer" asChild>
                       <span>Browse Files</span>
                     </Button>
                     <input
@@ -384,83 +313,227 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
                     />
                   </label>
                 </div>
-              </div>
+              ) : (
+                /* Minimal File Preview */
+                <div className="flex items-center gap-3 p-4 rounded-lg border border-zinc-800 bg-zinc-900/50">
+                  <div className="p-2.5 rounded-lg bg-zinc-800">
+                    <FileMusic className="w-5 h-5 text-zinc-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{selectedFile.name}</p>
+                    <p className="text-sm text-zinc-500">{songCount} songs</p>
+                  </div>
+                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                </div>
+              )}
 
               {validationError && (
-                <div className="flex items-center gap-2 text-sm text-destructive">
-                  <XCircle className="h-4 w-4" />
+                <div className="flex items-center gap-2 text-sm text-red-400">
+                  <XCircle className="h-4 w-4 flex-shrink-0" />
                   {validationError}
                 </div>
               )}
+            </div>
 
-              {selectedFile && !validationError && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      <div>
-                        <p className="font-medium">{selectedFile.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {csvPreview.length > 0 && `${csvPreview.length - 1} songs`}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedFile(null);
-                        setCsvPreview([]);
-                      }}
+            <DialogFooter className="gap-2 sm:gap-0">
+              {selectedFile && (
+                <Button variant="ghost" onClick={clearFile} className="text-zinc-400">
+                  Change File
+                </Button>
+              )}
+              <Button onClick={handleUpload} disabled={!selectedFile}>
+                <Upload className="mr-2 h-4 w-4" />
+                Upload & Enrich
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {/* UPLOADING STATE */}
+        {uploadState === 'uploading' && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                Enriching {playlistName}
+              </DialogTitle>
+              <DialogDescription>
+                {songCount} songs being processed
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-6">
+              {/* Animated progress bar */}
+              <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 rounded-full animate-pulse"
+                  style={{
+                    width: progress.current > 0 && progress.total > 0
+                      ? `${(progress.current / progress.total) * 100}%`
+                      : '30%',
+                    transition: 'width 0.5s ease-out'
+                  }}
+                />
+              </div>
+
+              <p className="text-sm text-zinc-400 text-center">
+                AI classification in progress...
+              </p>
+              <p className="text-xs text-zinc-500 text-center">
+                This may take a few minutes depending on the number of songs.
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* COMPLETE STATE */}
+        {uploadState === 'complete' && result && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                Upload Complete
+              </DialogTitle>
+              <DialogDescription>
+                {result.playlistName}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              {/* Stats Row - Clear labels */}
+              <div className="flex items-center gap-4 text-sm">
+                <span className="text-green-400 font-medium">
+                  {result.summary.imported} imported
+                </span>
+                <span className="text-zinc-500">•</span>
+                <span className="text-zinc-400">
+                  {result.summary.skipped} existing
+                </span>
+                {result.summary.errors > 0 && (
+                  <>
+                    <span className="text-zinc-500">•</span>
+                    <span className="text-red-400">
+                      {result.summary.errors} errors
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Live Feed of Imported Songs */}
+              {displayedSongs.length > 0 && (
+                <div
+                  ref={feedRef}
+                  className="max-h-48 overflow-y-auto space-y-1.5 pr-2"
+                >
+                  {displayedSongs.map((song, i) => (
+                    <div
+                      key={song.isrc || i}
+                      className="flex items-center gap-2 text-sm animate-fade-in"
+                      style={{ animationDelay: `${i * 50}ms` }}
                     >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  {/* CSV Preview */}
-                  {csvPreview.length > 0 && (
-                    <div className="space-y-3">
-                      <p className="text-sm font-semibold text-zinc-200">Preview (first 5 rows):</p>
-                      <div className="overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-900">
-                        <table className="w-full text-xs">
-                          <thead className="bg-zinc-800">
-                            <tr>
-                              {csvPreview[0].map((header, i) => (
-                                <th key={i} className="px-3 py-2 text-left font-semibold text-zinc-200 whitespace-nowrap">
-                                  {header}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="text-zinc-300">
-                            {csvPreview.slice(1, 6).map((row, i) => (
-                              <tr key={i} className="border-t border-zinc-800 hover:bg-zinc-800/50">
-                                {row.map((cell, j) => (
-                                  <td key={j} className="px-3 py-2 whitespace-nowrap">
-                                    {cell}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                      <span className="truncate flex-1 text-zinc-300">
+                        {song.artist} – {song.title}
+                      </span>
+                      {song.aiSubgenre1 && (
+                        <span className="px-2 py-0.5 bg-zinc-800 rounded text-xs text-zinc-400 flex-shrink-0">
+                          {song.aiSubgenre1}
+                        </span>
+                      )}
                     </div>
+                  ))}
+                  {result.summary.imported > 10 && (
+                    <p className="text-xs text-zinc-500 pt-1">
+                      and {result.summary.imported - 10} more...
+                    </p>
                   )}
-
-                  <Button
-                    onClick={handleUpload}
-                    className="w-full"
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload and Process
-                  </Button>
                 </div>
               )}
-            </>
-          )}
-        </div>
+
+              {/* Expandable Details */}
+              {(result.summary.skipped > 0 || result.summary.errors > 0) && (
+                <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+                  <CollapsibleTrigger className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-300 transition-colors">
+                    {detailsOpen ? (
+                      <ChevronDown className="w-4 h-4" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4" />
+                    )}
+                    View details
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-3 space-y-3">
+                    {/* Skipped Songs */}
+                    {result.summary.skipped > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
+                          <SkipForward className="w-3.5 h-3.5" />
+                          Already in database
+                        </p>
+                        <div className="max-h-24 overflow-y-auto space-y-1 pl-5">
+                          {result.results.skipped.slice(0, 5).map((song, i) => (
+                            <p key={i} className="text-xs text-zinc-500 truncate">
+                              {song.artist} – {song.title}
+                            </p>
+                          ))}
+                          {result.summary.skipped > 5 && (
+                            <p className="text-xs text-zinc-600">
+                              +{result.summary.skipped - 5} more
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Errors */}
+                    {result.summary.errors > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-medium text-red-400 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Processing errors
+                        </p>
+                        <div className="max-h-24 overflow-y-auto space-y-1 pl-5">
+                          {result.results.errors.map((err, i) => (
+                            <p key={i} className="text-xs text-red-400/80 truncate">
+                              {err.artist} – {err.title}: {err.error}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="ghost" onClick={handleUploadAnother} className="text-zinc-400">
+                Upload Another
+              </Button>
+              <Button onClick={handleViewInLibrary}>
+                View in Library
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
+
+      {/* CSS for fade-in animation */}
+      <style>{`
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.2s ease-out forwards;
+          opacity: 0;
+        }
+      `}</style>
     </Dialog>
   );
 }
