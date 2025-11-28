@@ -54,11 +54,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const accessibilitiesParam = req.query.accessibilities as string;
     const explicitsParam = req.query.explicits as string;
 
-    // Parse comma-separated values into arrays
-    const subgenres = subgenresParam ? subgenresParam.split(',').filter(Boolean) : [];
-    const energies = energiesParam ? energiesParam.split(',').filter(Boolean) : [];
-    const accessibilities = accessibilitiesParam ? accessibilitiesParam.split(',').filter(Boolean) : [];
-    const explicits = explicitsParam ? explicitsParam.split(',').filter(Boolean) : [];
+    // Parse comma-separated values into arrays with sanitization
+    const MAX_FILTER_VALUES = 50;
+    const parseFilterArray = (param: string | undefined): string[] => {
+      if (!param) return [];
+      return param.split(',').map(v => v.trim()).filter(Boolean).slice(0, MAX_FILTER_VALUES);
+    };
+
+    const subgenres = parseFilterArray(subgenresParam);
+    const energies = parseFilterArray(energiesParam);
+    const accessibilities = parseFilterArray(accessibilitiesParam);
+    const explicits = parseFilterArray(explicitsParam);
 
     // Parse single-select filter parameters
     const status = req.query.status as string;
@@ -142,12 +148,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const andConditions: any[] = [];
 
     // Subgenre filter (multi-select: searches across all 3 subgenre columns)
+    // Note: Database values are Title Case per CLAUDE.md, so we match exactly
     if (subgenres.length > 0) {
       andConditions.push({
         OR: [
-          { aiSubgenre1: { in: subgenres, mode: 'insensitive' } },
-          { aiSubgenre2: { in: subgenres, mode: 'insensitive' } },
-          { aiSubgenre3: { in: subgenres, mode: 'insensitive' } },
+          { aiSubgenre1: { in: subgenres } },
+          { aiSubgenre2: { in: subgenres } },
+          { aiSubgenre3: { in: subgenres } },
         ]
       });
     }
