@@ -1,4 +1,34 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+
+// Request notification permission
+const requestNotificationPermission = async () => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+};
+
+// Send browser notification
+const sendNotification = (title: string, body: string) => {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    // Only notify if page is not focused
+    if (document.hidden) {
+      const notification = new Notification(title, {
+        body,
+        icon: '/favicon.ico',
+        tag: 'upload-complete', // Prevents duplicate notifications
+      });
+
+      // Auto-close after 5 seconds
+      setTimeout(() => notification.close(), 5000);
+
+      // Focus window when clicked
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+    }
+  }
+};
 import { Upload, X, CheckCircle, XCircle, Loader2, FileMusic, ChevronDown, ChevronRight, SkipForward, AlertTriangle } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -69,6 +99,28 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
   const [displayedSongs, setDisplayedSongs] = useState<UploadResult['results']['imported']>([]);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
+
+  // Update page title based on upload state
+  useEffect(() => {
+    const originalTitle = 'Music Classifier';
+
+    if (uploadState === 'uploading') {
+      document.title = `⏳ Enriching ${songCount} songs...`;
+    } else if (uploadState === 'complete' && result) {
+      document.title = `✓ ${result.summary.imported} songs imported`;
+      // Reset title after 5 seconds
+      const timeout = setTimeout(() => {
+        document.title = originalTitle;
+      }, 5000);
+      return () => clearTimeout(timeout);
+    } else {
+      document.title = originalTitle;
+    }
+
+    return () => {
+      document.title = originalTitle;
+    };
+  }, [uploadState, songCount, result]);
 
   // Animate songs into the feed during upload simulation
   useEffect(() => {
@@ -198,6 +250,9 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
   const handleUpload = async () => {
     if (!selectedFile) return;
 
+    // Request notification permission when upload starts
+    requestNotificationPermission();
+
     setUploadState('uploading');
     setProgress({ current: 0, total: songCount });
 
@@ -220,6 +275,12 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
       setResult(uploadResult);
       setProgress({ current: uploadResult.summary.total, total: uploadResult.summary.total });
       setUploadState('complete');
+
+      // Send browser notification if tab is not focused
+      sendNotification(
+        'Upload Complete',
+        `${uploadResult.summary.imported} songs imported from ${uploadResult.playlistName}`
+      );
 
       toast.success(
         `Upload complete: ${uploadResult.summary.imported} imported, ${uploadResult.summary.skipped} already exist`
