@@ -4,7 +4,6 @@ import formidable from 'formidable';
 import fs from 'fs';
 import csv from 'csv-parser';
 import { v4 as uuidv4 } from 'uuid';
-import { calculateSongSimilarity, areSongsDuplicate } from '../../src/utils/fuzzy-matcher.cjs';
 import { classifySong } from '../../src/classifiers/gemini-classifier.cjs';
 import { classifyExplicitContent } from '../../src/classifiers/explicit-classifier.cjs';
 
@@ -116,44 +115,52 @@ interface ParsedSong {
   spotifyArtworkUrl?: string;
 }
 
-interface DuplicateMatch {
-  song: any;
-  similarity: number;
-  matchType: 'exact' | 'fuzzy';
-}
-
 interface UploadResult {
   batchId: string;
+  playlistId: string;
+  playlistName: string;
   summary: {
     total: number;
-    successful: number;
-    duplicates: number;
-    blocked: number;
+    imported: number;
+    skipped: number;
     errors: number;
   };
   results: {
-    successful: Array<any>;
-    duplicates: Array<{
-      newSong: ParsedSong;
-      existingSong: any;
-      similarity: number;
-    }>;
-    blocked: Array<{
-      song: ParsedSong;
-      reason: string;
-      existingIsrc: string;
+    imported: Array<any>;
+    skipped: Array<{
+      isrc: string;
+      title: string;
+      artist: string;
     }>;
     errors: Array<{
-      song: ParsedSong;
+      title: string;
+      artist: string;
       error: string;
     }>;
   };
 }
 
 /**
+ * Get existing ISRCs from database in a single batch query
+ */
+async function getExistingIsrcs(isrcs: string[]): Promise<Set<string>> {
+  const validIsrcs = isrcs.filter(Boolean);
+  if (validIsrcs.length === 0) return new Set();
+
+  const existing = await prisma.song.findMany({
+    where: { isrc: { in: validIsrcs } },
+    select: { isrc: true }
+  });
+  return new Set(existing.map(s => s.isrc));
+}
+
+/**
  * POST /api/songs/upload
  *
  * Upload and process a CSV file with songs
+ * - ISRC-based deduplication (skip songs that already exist)
+ * - Creates playlist record from CSV filename
+ * - AI enrichment with Gemini + Parallel AI
  *
  * Multipart form data:
  * - file: CSV file (max 250 songs for web uploads)
@@ -185,6 +192,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Create playlist record (following enrich-playlist.cjs pattern)
+    const playlist = await prisma.playlist.create({
+      data: {
+        name: batchName,
+        uploadBatchId: uploadBatchId,
+        uploadedByName: null, // Could be enhanced with auth later
+        sourceFile: file.originalFilename || batchName + '.csv',
+        totalSongs: 0,
+        newSongs: 0,
+        duplicateSongs: 0
+      }
+    });
+
     // Fetch Spotify track data for songs with Spotify Track IDs
     const spotifyTrackIds = songs
       .map(s => s.spotifyTrackId)
@@ -196,7 +216,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     songs.forEach(song => {
       if (song.spotifyTrackId && spotifyData.has(song.spotifyTrackId)) {
         const data = spotifyData.get(song.spotifyTrackId)!;
-        // Only set if not already present in CSV
         if (!song.spotifyPreviewUrl) {
           song.spotifyPreviewUrl = data.previewUrl || undefined;
         }
@@ -206,95 +225,98 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     });
 
+    // Batch check which ISRCs already exist (single DB query)
+    const allIsrcs = songs.map(s => s.isrc).filter((isrc): isrc is string => !!isrc);
+    const existingIsrcs = await getExistingIsrcs(allIsrcs);
+
+    // Separate songs into: to process vs skipped
+    const songsToProcess: ParsedSong[] = [];
+    const skippedSongs: Array<{ isrc: string; title: string; artist: string }> = [];
+
+    for (const song of songs) {
+      if (song.isrc && existingIsrcs.has(song.isrc)) {
+        // Song already exists - skip but still create playlist association
+        skippedSongs.push({
+          isrc: song.isrc,
+          title: song.title,
+          artist: song.artist
+        });
+
+        // Create playlist association for skipped song
+        await prisma.playlistSong.create({
+          data: {
+            playlistId: playlist.id,
+            songIsrc: song.isrc,
+            wasNew: false
+          }
+        });
+      } else {
+        songsToProcess.push(song);
+      }
+    }
+
     // Initialize result structure
     const result: UploadResult = {
       batchId: uploadBatchId,
+      playlistId: playlist.id,
+      playlistName: batchName,
       summary: {
         total: songs.length,
-        successful: 0,
-        duplicates: 0,
-        blocked: 0,
+        imported: 0,
+        skipped: skippedSongs.length,
         errors: 0
       },
       results: {
-        successful: [],
-        duplicates: [],
-        blocked: [],
+        imported: [],
+        skipped: skippedSongs,
         errors: []
       }
     };
 
-    // Process songs in parallel (concurrency: 10)
-    const CONCURRENCY = 10;
+    // Process new songs in parallel (concurrency: 7)
+    const CONCURRENCY = 7;
+
     const processSong = async (song: ParsedSong) => {
       try {
-        // Check for duplicates
-        const duplicate = await findDuplicate(song);
-
-        if (duplicate) {
-          if (duplicate.matchType === 'exact') {
-            // Exact ISRC match - block
-            return {
-              type: 'blocked',
-              data: {
-                song,
-                reason: 'Exact ISRC match',
-                existingIsrc: duplicate.song.isrc
-              }
-            };
-          } else {
-            // Fuzzy match - flag for review
-            return {
-              type: 'duplicate',
-              data: {
-                newSong: song,
-                existingSong: duplicate.song,
-                similarity: duplicate.similarity
-              }
-            };
-          }
-        }
-
-        // No duplicate - enrich and save
-        const enrichedSong = await enrichAndSaveSong(song, uploadBatchId, batchName);
-        return {
-          type: 'successful',
-          data: enrichedSong
-        };
-
+        const enrichedSong = await enrichAndSaveSong(song, uploadBatchId, batchName, playlist.id);
+        return { type: 'imported' as const, data: enrichedSong };
       } catch (error: any) {
         return {
-          type: 'error',
+          type: 'error' as const,
           data: {
-            song,
+            title: song.title,
+            artist: song.artist,
             error: error.message
           }
         };
       }
     };
 
-    // Process in batches of CONCURRENCY
-    for (let i = 0; i < songs.length; i += CONCURRENCY) {
-      const batch = songs.slice(i, i + CONCURRENCY);
-      const results = await Promise.all(batch.map(processSong));
+    // Process in batches
+    for (let i = 0; i < songsToProcess.length; i += CONCURRENCY) {
+      const batch = songsToProcess.slice(i, i + CONCURRENCY);
+      const batchResults = await Promise.all(batch.map(processSong));
 
-      // Categorize results
-      for (const res of results) {
-        if (res.type === 'successful') {
-          result.results.successful.push(res.data);
-          result.summary.successful++;
-        } else if (res.type === 'duplicate') {
-          result.results.duplicates.push(res.data);
-          result.summary.duplicates++;
-        } else if (res.type === 'blocked') {
-          result.results.blocked.push(res.data);
-          result.summary.blocked++;
+      for (const res of batchResults) {
+        if (res.type === 'imported') {
+          result.results.imported.push(res.data);
+          result.summary.imported++;
         } else if (res.type === 'error') {
           result.results.errors.push(res.data);
           result.summary.errors++;
         }
       }
     }
+
+    // Update playlist stats
+    await prisma.playlist.update({
+      where: { id: playlist.id },
+      data: {
+        totalSongs: songs.length,
+        newSongs: result.summary.imported,
+        duplicateSongs: result.summary.skipped
+      }
+    });
 
     return res.status(200).json(result);
 
@@ -393,69 +415,9 @@ async function parseCSV(filePath: string): Promise<ParsedSong[]> {
 }
 
 /**
- * Find duplicate for a song
- */
-async function findDuplicate(song: ParsedSong): Promise<DuplicateMatch | null> {
-  // Check for exact ISRC match
-  if (song.isrc) {
-    const exactMatch = await prisma.song.findUnique({
-      where: { isrc: song.isrc }
-    });
-
-    if (exactMatch) {
-      return {
-        song: exactMatch,
-        similarity: 100,
-        matchType: 'exact'
-      };
-    }
-  }
-
-  // Check for fuzzy match (70% threshold)
-  const allSongs = await prisma.song.findMany({
-    select: {
-      id: true,
-      isrc: true,
-      artist: true,
-      title: true,
-      bpm: true,
-      reviewed: true,
-      aiEnergy: true,
-      aiAccessibility: true,
-      aiSubgenre1: true,
-      aiSubgenre2: true,
-      aiSubgenre3: true
-    }
-  });
-
-  for (const existingSong of allSongs) {
-    const isDuplicate = areSongsDuplicate(
-      { artist: song.artist, title: song.title },
-      { artist: existingSong.artist || '', title: existingSong.title || '' },
-      70
-    );
-
-    if (isDuplicate) {
-      const similarity = calculateSongSimilarity(
-        { artist: song.artist, title: song.title },
-        { artist: existingSong.artist || '', title: existingSong.title || '' }
-      );
-
-      return {
-        song: existingSong,
-        similarity,
-        matchType: 'fuzzy'
-      };
-    }
-  }
-
-  return null;
-}
-
-/**
  * Enrich a song with AI classification and save to database
  */
-async function enrichAndSaveSong(song: ParsedSong, uploadBatchId: string, uploadBatchName: string) {
+async function enrichAndSaveSong(song: ParsedSong, uploadBatchId: string, uploadBatchName: string, playlistId: string) {
   // Run Gemini classification
   const geminiResult = await classifySong(song.artist, song.title, {
     bpm: song.bpm
@@ -472,6 +434,8 @@ async function enrichAndSaveSong(song: ParsedSong, uploadBatchId: string, upload
     bpm: song.bpm || null,
     spotifyTrackId: song.spotifyTrackId || null,
     s3Url: song.s3Url || null,
+    // Populate 'artwork' field (used by frontend) from Spotify artwork or CSV artwork
+    artwork: song.spotifyArtworkUrl || song.artworkUrl || null,
     artworkUrl: song.artworkUrl || null,
     spotifyPreviewUrl: song.spotifyPreviewUrl || null,
     spotifyArtworkUrl: song.spotifyArtworkUrl || null,
@@ -499,6 +463,15 @@ async function enrichAndSaveSong(song: ParsedSong, uploadBatchId: string, upload
     where: { isrc: enrichedSong.isrc },
     update: enrichedSong,
     create: enrichedSong
+  });
+
+  // Create playlist association
+  await prisma.playlistSong.create({
+    data: {
+      playlistId: playlistId,
+      songIsrc: savedSong.isrc,
+      wasNew: true
+    }
   });
 
   return savedSong;

@@ -187,3 +187,30 @@ export async function getPlaylists(): Promise<Playlist[]> {
   const data = await response.json();
   return data.playlists;
 }
+
+export interface UploadStatus {
+  batchId: string;
+  playlistId: string;
+  playlistName: string;
+  total: number;
+  processed: number;
+  complete: boolean;
+  newSongs: number;
+  duplicateSongs: number;
+}
+
+/**
+ * Gets the status of an upload batch (for progress tracking)
+ */
+export async function getUploadStatus(batchId: string): Promise<UploadStatus> {
+  const response = await fetch(`/api/songs/upload-status?batchId=${encodeURIComponent(batchId)}`, {
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to get upload status' }));
+    throw new Error(error.error || 'Failed to get upload status');
+  }
+
+  return response.json();
+}
