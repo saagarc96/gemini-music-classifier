@@ -98,6 +98,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
   const [batchId, setBatchId] = useState<string | null>(null);
   const [displayedSongs, setDisplayedSongs] = useState<UploadResult['results']['imported']>([]);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [pollFailures, setPollFailures] = useState(0);
   const feedRef = useRef<HTMLDivElement>(null);
 
   // Update page title based on upload state
@@ -156,18 +157,34 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
         const response = await fetch(`/api/songs/upload-status?batchId=${batchId}`);
         if (response.ok) {
           const status = await response.json();
-          setProgress({
+          setProgress(prev => ({
             current: status.processed,
-            total: status.total || progress.total
+            total: status.total || prev.total
+          }));
+          setPollFailures(0); // Reset on success
+        } else {
+          setPollFailures(prev => {
+            const newCount = prev + 1;
+            if (newCount === 3) {
+              toast.warning('Unable to track progress. Upload may still be processing.');
+            }
+            return newCount;
           });
         }
       } catch (error) {
         console.error('Progress poll error:', error);
+        setPollFailures(prev => {
+          const newCount = prev + 1;
+          if (newCount === 3) {
+            toast.warning('Unable to track progress. Upload may still be processing.');
+          }
+          return newCount;
+        });
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [uploadState, batchId, progress.total]);
+  }, [uploadState, batchId]); // Removed progress.total to fix race condition
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -294,6 +311,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
   };
 
   const handleClose = () => {
+    document.title = 'Music Classifier'; // Reset title on close
     setSelectedFile(null);
     setSongCount(0);
     setValidationError('');
@@ -303,6 +321,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
     setBatchId(null);
     setDisplayedSongs([]);
     setDetailsOpen(false);
+    setPollFailures(0);
     onOpenChange(false);
   };
 
@@ -322,6 +341,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
     setBatchId(null);
     setDisplayedSongs([]);
     setDetailsOpen(false);
+    setPollFailures(0);
   };
 
   const playlistName = selectedFile?.name.replace(/\.csv$/i, '') || 'Playlist';

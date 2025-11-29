@@ -74,32 +74,48 @@ export function FilterPanel({
 
   // Fetch upload batches on mount
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchBatches() {
       try {
         const batches = await getUploadBatches();
-        // Sort by upload date descending (most recent first)
-        const sortedBatches = batches.sort((a, b) => {
-          return new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime();
-        });
-        setUploadBatches(sortedBatches);
+        if (!cancelled) {
+          // Sort by upload date descending (most recent first)
+          const sortedBatches = batches.sort((a, b) => {
+            return new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime();
+          });
+          setUploadBatches(sortedBatches);
+        }
       } catch (error) {
-        console.error('Failed to load upload batches:', error);
+        if (!cancelled) {
+          console.error('Failed to load upload batches:', error);
+        }
       }
     }
     fetchBatches();
+
+    return () => { cancelled = true; };
   }, []);
 
   // Fetch playlists on mount
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchPlaylistsData() {
       try {
         const playlistsData = await getPlaylists();
-        setPlaylists(playlistsData);
+        if (!cancelled) {
+          setPlaylists(playlistsData);
+        }
       } catch (error) {
-        console.error('Failed to load playlists:', error);
+        if (!cancelled) {
+          console.error('Failed to load playlists:', error);
+        }
       }
     }
     fetchPlaylistsData();
+
+    return () => { cancelled = true; };
   }, []);
 
   // Format date for display

@@ -1,5 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { PrismaClient } from '@prisma/client';
+import { requireAuth } from '../lib/auth.js';
 
 const prisma = new PrismaClient();
 
@@ -28,10 +29,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Require authentication
+  const user = await requireAuth(req, res);
+  if (!user) {
+    return; // requireAuth already sent 401 response
+  }
+
   const { batchId } = req.query;
 
   if (!batchId || typeof batchId !== 'string') {
     return res.status(400).json({ error: 'batchId is required' });
+  }
+
+  // Validate UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(batchId)) {
+    return res.status(400).json({ error: 'Invalid batchId format' });
   }
 
   try {

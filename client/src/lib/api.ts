@@ -125,8 +125,18 @@ export async function getSongs(params: GetSongsParams = {}): Promise<PaginatedRe
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to fetch songs' }));
-    throw new Error(error.error || 'Failed to fetch songs');
+    let errorMessage = `Request failed with status ${response.status}`;
+    try {
+      const error = await response.json();
+      errorMessage = error.error || error.message || errorMessage;
+    } catch {
+      // Non-JSON response (502, HTML error pages, etc.)
+      const text = await response.text().catch(() => '');
+      if (text) {
+        console.error('Non-JSON error response:', text.substring(0, 500));
+      }
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json();

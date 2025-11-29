@@ -6,6 +6,7 @@ import csv from 'csv-parser';
 import { v4 as uuidv4 } from 'uuid';
 import { classifySong } from '../../src/classifiers/gemini-classifier.cjs';
 import { classifyExplicitContent } from '../../src/classifiers/explicit-classifier.cjs';
+import { requireAuth } from '../lib/auth.js';
 
 const prisma = new PrismaClient();
 
@@ -173,6 +174,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Require authentication
+  const user = await requireAuth(req, res);
+  if (!user) {
+    return; // requireAuth already sent 401 response
+  }
+
   const uploadBatchId = uuidv4();
 
   try {
@@ -243,13 +250,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
 
         // Create playlist association for skipped song
-        await prisma.playlistSong.create({
-          data: {
-            playlistId: playlist.id,
-            songIsrc: song.isrc,
-            wasNew: false
+        try {
+          await prisma.playlistSong.create({
+            data: {
+              playlistId: playlist.id,
+              songIsrc: song.isrc,
+              wasNew: false
+            }
+          });
+        } catch (error: any) {
+          // Ignore duplicate key errors (already associated)
+          if (error.code !== 'P2002') {
+            console.error(`Failed to create playlist association for ${song.isrc}:`, error.message);
           }
-        });
+        }
       } else {
         songsToProcess.push(song);
       }
@@ -340,10 +354,17 @@ async function parseFormData(req: VercelRequest): Promise<{
   batchName: string;
 }> {
   return new Promise((resolve, reject) => {
-    const form = formidable({ multiples: false });
+    const form = formidable({
+      multiples: false,
+      maxFileSize: 5 * 1024 * 1024, // 5MB limit
+    });
 
     form.parse(req, async (err, fields, files) => {
       if (err) {
+        // Handle file size limit error
+        if ((err as any).code === 'LIMIT_FILE_SIZE' || err.message?.includes('maxFileSize')) {
+          return reject(new Error('File too large. Maximum size is 5MB.'));
+        }
         return reject(err);
       }
 
