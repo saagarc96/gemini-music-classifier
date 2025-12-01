@@ -13,6 +13,7 @@
     "enrich:playlist": "node scripts/enrich-playlist.cjs",
     "enrich:spotify": "node scripts/enrich-spotify-playlist.cjs",
     "enrich:batch": "node scripts/batch-enrich-playlists.cjs",
+    "import:pretagged": "node scripts/import-pretagged-spotify.cjs",
     "process:playlist": "node src/playlist-batch-runner.js",
     "process:all": "node src/orchestrator.js",
     "monitor": "node src/monitor-batch-job.js",
