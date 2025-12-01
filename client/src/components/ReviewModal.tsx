@@ -228,6 +228,7 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueu
             spotifyTrackId={song.spotify_track_id}
             title={song.title}
             artist={song.artist}
+            autoplay
           />
 
           {/* Admin Review Actions */}

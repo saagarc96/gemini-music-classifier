@@ -8,9 +8,10 @@ interface AudioPlayerProps {
   spotifyTrackId?: string | null;
   title: string;
   artist: string;
+  autoplay?: boolean;
 }
 
-export function AudioPlayer({ src, spotifyTrackId, title, artist }: AudioPlayerProps) {
+export function AudioPlayer({ src, spotifyTrackId, title, artist, autoplay }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -49,6 +50,17 @@ export function AudioPlayer({ src, spotifyTrackId, title, artist }: AudioPlayerP
       audioRef.current.volume = isMuted ? 0 : volume;
     }
   }, [volume, isMuted]);
+
+  // Autoplay when src changes (e.g., after Save & Next)
+  useEffect(() => {
+    if (autoplay && src && audioRef.current) {
+      audioRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch(() => {
+          // Browser may block autoplay - fail silently
+        });
+    }
+  }, [src, autoplay]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -90,7 +102,7 @@ export function AudioPlayer({ src, spotifyTrackId, title, artist }: AudioPlayerP
 
   // If Spotify track ID exists, use Spotify embed instead
   if (spotifyTrackId) {
-    return <SpotifyEmbed trackId={spotifyTrackId} title={title} artist={artist} />;
+    return <SpotifyEmbed trackId={spotifyTrackId} title={title} artist={artist} autoplay={autoplay} />;
   }
 
   if (!src) {
