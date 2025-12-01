@@ -57,6 +57,11 @@ function loadSpotifyApi(callback: (api: SpotifyIFrameAPI) => void) {
     const script = document.createElement('script');
     script.src = 'https://open.spotify.com/embed/iframe-api/v1';
     script.async = true;
+    script.onerror = () => {
+      console.error('Failed to load Spotify iframe API');
+      spotifyApiLoaded = false;
+      pendingCallbacks = [];
+    };
     document.body.appendChild(script);
   }
 }
@@ -105,13 +110,14 @@ export function SpotifyEmbed({ trackId, title, artist, height = 152, autoplay }:
 
           // Autoplay after a short delay to ensure embed is ready
           if (autoplay) {
+            const SPOTIFY_EMBED_READY_DELAY_MS = 500;
             setTimeout(() => {
               try {
-                controller.togglePlay();
-              } catch {
-                // Autoplay may fail due to browser restrictions
+                controller.play();
+              } catch (error) {
+                console.info('Spotify autoplay blocked or failed:', error);
               }
-            }, 500);
+            }, SPOTIFY_EMBED_READY_DELAY_MS);
           }
         }
       );
