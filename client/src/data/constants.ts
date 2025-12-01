@@ -225,6 +225,22 @@ export const REVIEW_STATUSES = [
   "unreviewed",
 ] as const;
 
+export const APPROVAL_STATUSES = [
+  "all",
+  "active",
+  "PENDING",
+  "APPROVED",
+  "REJECTED",
+] as const;
+
+export const APPROVAL_STATUS_LABELS: Record<string, string> = {
+  "all": "All",
+  "active": "Active (Non-Rejected)",
+  "PENDING": "Pending",
+  "APPROVED": "Approved",
+  "REJECTED": "Rejected",
+};
+
 // TypeScript types for compile-time safety
 export type EnergyLevel = (typeof ENERGY_LEVELS)[number];
 export type AccessibilityType = (typeof ACCESSIBILITY_TYPES)[number];
