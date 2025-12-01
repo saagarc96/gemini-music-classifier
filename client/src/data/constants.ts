@@ -4,7 +4,7 @@
  * AUTO-GENERATED from data/subgenres.json
  * DO NOT EDIT MANUALLY - Run: npm run generate:constants
  *
- * Last generated: 2025-11-25T20:45:25.078Z
+ * Last generated: 2025-12-01T16:16:32.861Z
  */
 
 export const SUBGENRES = [
@@ -157,6 +157,7 @@ export const SUBGENRES = [
   "Modern Soul",
   "Motown",
   "Mumble Rap",
+  "Native American Spa",
   "Natural Soundscape",
   "Neo Soul",
   "Neo-Classical",
@@ -224,24 +225,10 @@ export const REVIEW_STATUSES = [
   "unreviewed",
 ] as const;
 
-// Approval statuses for reject-only workflow (soft approve model)
-export const APPROVAL_STATUSES = [
-  "all",
-  "active",
-  "rejected",
-] as const;
-
-export const APPROVAL_STATUS_LABELS: Record<string, string> = {
-  all: "All Songs",
-  active: "Active",
-  rejected: "Rejected",
-};
-
 // TypeScript types for compile-time safety
 export type EnergyLevel = (typeof ENERGY_LEVELS)[number];
 export type AccessibilityType = (typeof ACCESSIBILITY_TYPES)[number];
 export type ExplicitType = (typeof EXPLICIT_TYPES)[number];
 export type AIStatus = (typeof AI_STATUSES)[number];
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
-export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 export type Subgenre = (typeof SUBGENRES)[number];
