@@ -3,7 +3,6 @@ import { Toaster } from './components/ui/sonner';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import SongsPage from './pages/SongsPage';
-import UploadResults from './pages/UploadResults';
 
 function AppContent() {
   const { user, loading: authLoading } = useAuth();
@@ -30,7 +29,6 @@ function AppContent() {
       <Toaster position="top-right" />
       <Routes>
         <Route path="/" element={<SongsPage />} />
-        <Route path="/upload-results" element={<UploadResults />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

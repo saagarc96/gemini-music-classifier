@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { FilterPanel } from '../components/FilterPanel';
 import { SongTable } from '../components/SongTable';
 import { ReviewModal } from '../components/ReviewModal';
@@ -18,7 +17,6 @@ import {
 import { Button } from '../components/ui/button';
 
 export default function SongsPage() {
-  const navigate = useNavigate();
   const [songs, setSongs] = useState<Song[]>([]);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -233,8 +231,13 @@ export default function SongsPage() {
   };
 
   const handleUploadComplete = (result: any) => {
-    // Navigate to results page with upload results
-    navigate('/upload-results', { state: { uploadResult: result } });
+    // Filter by the newly created playlist and refresh
+    if (result?.playlistId) {
+      setSelectedPlaylistId(result.playlistId);
+      setCurrentPage(1);
+    }
+    // Refresh the songs list
+    fetchSongs();
   };
 
   return (
