@@ -19,7 +19,7 @@ const { PrismaClient } = require('@prisma/client');
 const spotifyClient = require('../src/utils/spotify-client.cjs');
 const { normalizeBpm } = require('../src/utils/bpm-normalizer.cjs');
 const { classifySong } = require('../src/classifiers/gemini-classifier.cjs');
-const { classifyExplicitContent } = require('../src/classifiers/explicit-classifier.cjs');
+const { submitAllExplicitTasks, pollAndUpdateExplicitResults } = require('../src/utils/explicit-batch-helper.cjs');
 
 const prisma = new PrismaClient();
 
@@ -88,9 +88,9 @@ async function fetchSpotifyMetadata(songs) {
 }
 
 /**
- * Process a single song
+ * Process a single song (Gemini only - explicit handled in Phase 3)
  */
-async function processSong(song, spotifyMetadata, batchName = null, batchId = null, playlistId = null, skipExisting = true) {
+async function processSongGeminiOnly(song, spotifyMetadata, batchName = null, batchId = null, playlistId = null, skipExisting = true) {
   try {
     // Check if song exists before processing
     const existingSong = await prisma.song.findUnique({
@@ -100,10 +100,14 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
 
     // If song exists and skipExisting is true, just create playlist association
     if (existingSong && skipExisting) {
-      // Create playlist association if playlistId provided
+      // Create playlist association if playlistId provided (upsert to handle duplicates in CSV)
       if (playlistId) {
-        await prisma.playlistSong.create({
-          data: {
+        await prisma.playlistSong.upsert({
+          where: {
+            playlistId_songIsrc: { playlistId, songIsrc: song.isrc }
+          },
+          update: {},
+          create: {
             playlistId: playlistId,
             songIsrc: song.isrc,
             wasNew: false
@@ -121,6 +125,7 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
         bpmTransformation: 'N/A',
         aiStatus: existingSong.aiStatus || 'EXISTING',
         wasNew: false,
+        aiExplicit: existingSong.aiExplicit || null,
       };
     }
 
@@ -134,16 +139,12 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
       console.log(`  BPM normalized: ${bpmResult.originalBpm} → ${bpmResult.normalizedBpm} (${bpmResult.transformations.join(', ')})`);
     }
 
-    // Run AI classifications in parallel
-    const [geminiResult, explicitResult] = await Promise.all([
-      classifySong(song.artist, song.title, {
-        bpm: bpmResult.normalizedBpm,
-        // We deliberately don't include Spotify's audio features to stay compliant
-      }),
-      classifyExplicitContent(song.title, song.artist)
-    ]);
+    // Run Gemini classification only (explicit handled in Phase 3)
+    const geminiResult = await classifySong(song.artist, song.title, {
+      bpm: bpmResult.normalizedBpm,
+    });
 
-    // Prepare database record
+    // Prepare database record (aiExplicit is null, will be updated in Phase 3)
     const songData = {
       isrc: song.isrc,
       title: song.title,
@@ -162,7 +163,7 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
       aiContextUsed: geminiResult.context || null,
       aiEnergy: geminiResult.energy || null,
       aiAccessibility: geminiResult.accessibility || null,
-      aiExplicit: explicitResult.classification || null,
+      aiExplicit: null, // Will be updated in Phase 3
       aiSubgenre1: geminiResult.subgenre1 || null,
       aiSubgenre2: geminiResult.subgenre2 || null,
       aiSubgenre3: geminiResult.subgenre3 || null,
@@ -185,10 +186,17 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
       create: songData,
     });
 
-    // Create playlist association if playlistId provided
+    // Create playlist association if playlistId provided (upsert to handle duplicates in CSV)
     if (playlistId) {
-      await prisma.playlistSong.create({
-        data: {
+      await prisma.playlistSong.upsert({
+        where: {
+          playlistId_songIsrc: {
+            playlistId: playlistId,
+            songIsrc: song.isrc
+          }
+        },
+        update: {}, // No update needed, just skip if exists
+        create: {
           playlistId: playlistId,
           songIsrc: song.isrc,
           wasNew: wasNew
@@ -206,6 +214,7 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
       bpmTransformation: bpmResult.transformations.join(', '),
       aiStatus: geminiResult.status,
       wasNew: wasNew,
+      aiExplicit: null, // Will be updated in Phase 3
     };
 
   } catch (error) {
@@ -218,25 +227,80 @@ async function processSong(song, spotifyMetadata, batchName = null, batchId = nu
       artist: song.artist,
       error: error.message,
       wasNew: false,
+      aiExplicit: null,
     };
   }
 }
 
 /**
- * Process songs with concurrency control
+ * Process songs with 3-phase concurrency control
  */
 async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency, playlistName = null, batchId = null, playlistId = null, skipExisting = true) {
   const results = [];
 
-  for (let i = 0; i < songs.length; i += concurrency) {
-    const batch = songs.slice(i, i + concurrency);
-    const batchNumber = Math.floor(i / concurrency) + 1;
-    const totalBatches = Math.ceil(songs.length / concurrency);
+  // Filter to get songs that need processing (not skipped)
+  const songsToCheck = [];
+  const skippedResults = [];
 
-    console.log(`\nProcessing batch ${batchNumber}/${totalBatches} (songs ${i + 1}-${Math.min(i + concurrency, songs.length)})...`);
+  for (const song of songs) {
+    if (skipExisting) {
+      const existing = await prisma.song.findUnique({ where: { isrc: song.isrc } });
+      if (existing) {
+        // Create playlist association for skipped song (upsert to handle duplicates)
+        if (playlistId) {
+          await prisma.playlistSong.upsert({
+            where: {
+              playlistId_songIsrc: { playlistId, songIsrc: song.isrc }
+            },
+            update: {},
+            create: { playlistId, songIsrc: song.isrc, wasNew: false }
+          });
+        }
+        skippedResults.push({
+          success: true,
+          skipped: true,
+          isrc: song.isrc,
+          title: song.title,
+          artist: song.artist,
+          hasPreview: !!existing.spotifyPreviewUrl,
+          bpmTransformation: 'N/A',
+          aiStatus: existing.aiStatus || 'EXISTING',
+          wasNew: false,
+          aiExplicit: existing.aiExplicit || null,
+        });
+        continue;
+      }
+    }
+    songsToCheck.push(song);
+  }
+
+  if (skippedResults.length > 0) {
+    console.log(`\n⏭️ Skipped ${skippedResults.length} songs (already in database)`);
+  }
+
+  if (songsToCheck.length === 0) {
+    console.log('\nNo new songs to process.');
+    return [...skippedResults];
+  }
+
+  // === PHASE 1: Submit all explicit tasks upfront ===
+  console.log(`\n[2.1] Submitting explicit content tasks for ${songsToCheck.length} songs...`);
+  const explicitSubmissions = await submitAllExplicitTasks(songsToCheck, concurrency);
+  const submitted = explicitSubmissions.filter(s => s.status === 'submitted').length;
+  console.log(`  ✓ Submitted ${submitted}/${songsToCheck.length} tasks`);
+
+  // === PHASE 2: Run Gemini in batches AND save to DB immediately ===
+  console.log(`\n[2.2] Running Gemini classification (${songsToCheck.length} songs, concurrency: ${concurrency})...`);
+
+  for (let i = 0; i < songsToCheck.length; i += concurrency) {
+    const batch = songsToCheck.slice(i, i + concurrency);
+    const batchNumber = Math.floor(i / concurrency) + 1;
+    const totalBatches = Math.ceil(songsToCheck.length / concurrency);
+
+    console.log(`\n  Batch ${batchNumber}/${totalBatches} (songs ${i + 1}-${Math.min(i + concurrency, songsToCheck.length)})...`);
 
     const batchResults = await Promise.all(
-      batch.map(song => processSong(song, spotifyMetadata, playlistName, batchId, playlistId, skipExisting))
+      batch.map(song => processSongGeminiOnly(song, spotifyMetadata, playlistName, batchId, playlistId, false))
     );
 
     results.push(...batchResults);
@@ -245,19 +309,20 @@ async function processSongsWithConcurrency(songs, spotifyMetadata, concurrency, 
     batchResults.forEach((result, idx) => {
       const songNum = i + idx + 1;
       if (result.success) {
-        if (result.skipped) {
-          console.log(`  ⏭️ [${songNum}/${songs.length}] ${result.artist} - ${result.title} (SKIPPED - already in DB)`);
-        } else {
-          const previewIcon = result.hasPreview ? '🎵' : '⚠️';
-          console.log(`  ${previewIcon} [${songNum}/${songs.length}] ${result.artist} - ${result.title} (${result.aiStatus})`);
-        }
+        const previewIcon = result.hasPreview ? '🎵' : '⚠️';
+        console.log(`    ${previewIcon} [${songNum}/${songsToCheck.length}] ${result.artist} - ${result.title} (${result.aiStatus})`);
       } else {
-        console.log(`  ✗ [${songNum}/${songs.length}] ${result.artist} - ${result.title} - ERROR: ${result.error}`);
+        console.log(`    ✗ [${songNum}/${songsToCheck.length}] ${result.artist} - ${result.title} - ERROR: ${result.error}`);
       }
     });
   }
 
-  return results;
+  // === PHASE 3: Poll all explicit results and UPDATE records ===
+  console.log(`\n[2.3] Polling explicit content results...`);
+  await pollAndUpdateExplicitResults(explicitSubmissions, results, prisma);
+
+  // Combine skipped and processed results
+  return [...skippedResults, ...results];
 }
 
 /**
@@ -446,4 +511,9 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { parseSpotifyCSV, processSong };
+module.exports = {
+  parseSpotifyCSV,
+  processSongGeminiOnly,
+  // Backwards-compatible alias
+  processSong: processSongGeminiOnly
+};
