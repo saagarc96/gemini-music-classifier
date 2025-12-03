@@ -1,4 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import {
+  processBatch,
+  chunkArray,
+  type ProcessedSong,
+  type UploadResponse,
+} from '../lib/api';
 
 // Request notification permission
 const requestNotificationPermission = async () => {
@@ -29,7 +35,7 @@ const sendNotification = (title: string, body: string) => {
     }
   }
 };
-import { Upload, X, CheckCircle, XCircle, Loader2, FileMusic, ChevronDown, ChevronRight, SkipForward, AlertTriangle } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, Loader2, FileMusic } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   Dialog,
@@ -39,12 +45,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from './ui/dialog';
-import { Progress } from './ui/progress';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from './ui/collapsible';
 import { toast } from 'sonner';
 
 interface UploadResult {
@@ -58,14 +58,7 @@ interface UploadResult {
     errors: number;
   };
   results: {
-    imported: Array<{
-      isrc: string;
-      title: string;
-      artist: string;
-      aiEnergy?: string;
-      aiAccessibility?: string;
-      aiSubgenre1?: string;
-    }>;
+    imported: ProcessedSong[];
     skipped: Array<{
       isrc: string;
       title: string;
@@ -85,7 +78,15 @@ interface UploadModalProps {
   onUploadComplete?: (result: UploadResult) => void;
 }
 
-type UploadState = 'idle' | 'uploading' | 'complete';
+type UploadState = 'idle' | 'preparing' | 'processing' | 'complete';
+
+interface BatchProgress {
+  phase: 'preparing' | 'processing' | 'finalizing';
+  currentBatch: number;
+  totalBatches: number;
+  songsProcessed: number;
+  totalSongs: number;
+}
 
 export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -94,18 +95,23 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
   const [songCount, setSongCount] = useState(0);
   const [validationError, setValidationError] = useState<string>('');
   const [result, setResult] = useState<UploadResult | null>(null);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [batchProgress, setBatchProgress] = useState<BatchProgress>({
+    phase: 'preparing',
+    currentBatch: 0,
+    totalBatches: 0,
+    songsProcessed: 0,
+    totalSongs: 0,
+  });
   const [batchId, setBatchId] = useState<string | null>(null);
-  const [displayedSongs, setDisplayedSongs] = useState<UploadResult['results']['imported']>([]);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const feedRef = useRef<HTMLDivElement>(null);
 
   // Update page title based on upload state
   useEffect(() => {
     const originalTitle = 'Music Classifier';
 
-    if (uploadState === 'uploading') {
-      document.title = `⏳ Enriching ${songCount} songs...`;
+    if (uploadState === 'preparing') {
+      document.title = `⏳ Preparing ${songCount} songs...`;
+    } else if (uploadState === 'processing') {
+      document.title = `⏳ Processing batch ${batchProgress.currentBatch}/${batchProgress.totalBatches}...`;
     } else if (uploadState === 'complete' && result) {
       document.title = `✓ ${result.summary.imported} songs imported`;
       // Reset title after 5 seconds
@@ -120,54 +126,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
     return () => {
       document.title = originalTitle;
     };
-  }, [uploadState, songCount, result]);
-
-  // Animate songs into the feed during upload simulation
-  useEffect(() => {
-    if (uploadState === 'complete' && result) {
-      // Stagger in the imported songs for visual feedback
-      const songs = result.results.imported;
-      let index = 0;
-      setDisplayedSongs([]);
-
-      const interval = setInterval(() => {
-        if (index < songs.length && index < 10) { // Show max 10 in the feed
-          setDisplayedSongs(prev => [...prev, songs[index]]);
-          index++;
-          // Auto-scroll to bottom
-          if (feedRef.current) {
-            feedRef.current.scrollTop = feedRef.current.scrollHeight;
-          }
-        } else {
-          clearInterval(interval);
-        }
-      }, 80);
-
-      return () => clearInterval(interval);
-    }
-  }, [uploadState, result]);
-
-  // Poll for progress during upload
-  useEffect(() => {
-    if (uploadState !== 'uploading' || !batchId) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch(`/api/songs/upload-status?batchId=${batchId}`);
-        if (response.ok) {
-          const status = await response.json();
-          setProgress({
-            current: status.processed,
-            total: status.total || progress.total
-          });
-        }
-      } catch (error) {
-        console.error('Progress poll error:', error);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [uploadState, batchId, progress.total]);
+  }, [uploadState, songCount, result, batchProgress]);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -253,10 +212,17 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
     // Request notification permission when upload starts
     requestNotificationPermission();
 
-    setUploadState('uploading');
-    setProgress({ current: 0, total: songCount });
+    setUploadState('preparing');
+    setBatchProgress({
+      phase: 'preparing',
+      currentBatch: 0,
+      totalBatches: 0,
+      songsProcessed: 0,
+      totalSongs: songCount,
+    });
 
     try {
+      // Step 1: Quick upload - parse CSV, check ISRCs, get songs to process
       const formData = new FormData();
       formData.append('file', selectedFile);
 
@@ -270,20 +236,96 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
         throw new Error(errorData.error || `Upload failed: ${response.statusText}`);
       }
 
-      const uploadResult: UploadResult = await response.json();
-      setBatchId(uploadResult.batchId);
-      setResult(uploadResult);
-      setProgress({ current: uploadResult.summary.total, total: uploadResult.summary.total });
+      const uploadResponse: UploadResponse = await response.json();
+      setBatchId(uploadResponse.batchId);
+
+      // Initialize result tracking
+      const allImported: ProcessedSong[] = [];
+      const allErrors: Array<{ artist: string; title: string; error: string }> = [];
+
+      // Step 2: Process songs in batches if there are songs to process
+      if (uploadResponse.songsToProcess.length > 0) {
+        setUploadState('processing');
+
+        const BATCH_SIZE = 10;
+        const batches = chunkArray(uploadResponse.songsToProcess, BATCH_SIZE);
+
+        setBatchProgress(prev => ({
+          ...prev,
+          phase: 'processing',
+          totalBatches: batches.length,
+          totalSongs: uploadResponse.songsToProcess.length,
+        }));
+
+        for (let i = 0; i < batches.length; i++) {
+          setBatchProgress(prev => ({
+            ...prev,
+            currentBatch: i + 1,
+          }));
+
+          try {
+            const batchResult = await processBatch(
+              uploadResponse.batchId,
+              uploadResponse.playlistId,
+              uploadResponse.playlistName,
+              batches[i]
+            );
+
+            // Add results progressively
+            allImported.push(...batchResult.results);
+            allErrors.push(...batchResult.errors);
+
+            // Update progress
+            setBatchProgress(prev => ({
+              ...prev,
+              songsProcessed: prev.songsProcessed + batchResult.processed + batchResult.errors.length,
+            }));
+
+          } catch (batchError: any) {
+            console.error(`Batch ${i + 1} failed:`, batchError);
+            // Add all songs in failed batch to errors
+            for (const song of batches[i]) {
+              allErrors.push({
+                artist: song.artist,
+                title: song.title,
+                error: batchError.message || 'Batch processing failed',
+              });
+            }
+          }
+        }
+      }
+
+      // Step 3: Finalize
+      setBatchProgress(prev => ({ ...prev, phase: 'finalizing' }));
+
+      const finalResult: UploadResult = {
+        batchId: uploadResponse.batchId,
+        playlistId: uploadResponse.playlistId,
+        playlistName: uploadResponse.playlistName,
+        summary: {
+          total: uploadResponse.summary.total,
+          imported: allImported.length,
+          skipped: uploadResponse.summary.skipped,
+          errors: allErrors.length,
+        },
+        results: {
+          imported: allImported,
+          skipped: uploadResponse.skippedSongs,
+          errors: allErrors,
+        },
+      };
+
+      setResult(finalResult);
       setUploadState('complete');
 
       // Send browser notification if tab is not focused
       sendNotification(
         'Upload Complete',
-        `${uploadResult.summary.imported} songs imported from ${uploadResult.playlistName}`
+        `${finalResult.summary.imported} songs imported from ${finalResult.playlistName}`
       );
 
       toast.success(
-        `Upload complete: ${uploadResult.summary.imported} imported, ${uploadResult.summary.skipped} already exist`
+        `Upload complete: ${finalResult.summary.imported} imported, ${finalResult.summary.skipped} already exist`
       );
 
     } catch (error: any) {
@@ -299,10 +341,14 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
     setValidationError('');
     setResult(null);
     setUploadState('idle');
-    setProgress({ current: 0, total: 0 });
+    setBatchProgress({
+      phase: 'preparing',
+      currentBatch: 0,
+      totalBatches: 0,
+      songsProcessed: 0,
+      totalSongs: 0,
+    });
     setBatchId(null);
-    setDisplayedSongs([]);
-    setDetailsOpen(false);
     onOpenChange(false);
   };
 
@@ -318,10 +364,14 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
     setSongCount(0);
     setResult(null);
     setUploadState('idle');
-    setProgress({ current: 0, total: 0 });
+    setBatchProgress({
+      phase: 'preparing',
+      currentBatch: 0,
+      totalBatches: 0,
+      songsProcessed: 0,
+      totalSongs: 0,
+    });
     setBatchId(null);
-    setDisplayedSongs([]);
-    setDetailsOpen(false);
   };
 
   const playlistName = selectedFile?.name.replace(/\.csv$/i, '') || 'Playlist';
@@ -410,38 +460,60 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
           </>
         )}
 
-        {/* UPLOADING STATE */}
-        {uploadState === 'uploading' && (
+        {/* PREPARING STATE */}
+        {uploadState === 'preparing' && (
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                Enriching {playlistName}
+                Preparing Upload
               </DialogTitle>
               <DialogDescription>
-                {songCount} songs being processed
+                Analyzing {songCount} songs...
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-6">
-              {/* Animated progress bar */}
+              <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full animate-pulse w-1/4" />
+              </div>
+
+              <p className="text-sm text-zinc-400 text-center">
+                Parsing CSV and checking for duplicates...
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* PROCESSING STATE */}
+        {uploadState === 'processing' && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                Processing {playlistName}
+              </DialogTitle>
+              <DialogDescription>
+                Batch {batchProgress.currentBatch} of {batchProgress.totalBatches}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-6">
+              {/* Progress bar */}
               <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-blue-500 rounded-full animate-pulse"
+                  className="h-full bg-blue-500 rounded-full"
                   style={{
-                    width: progress.current > 0 && progress.total > 0
-                      ? `${(progress.current / progress.total) * 100}%`
-                      : '30%',
+                    width: batchProgress.totalSongs > 0
+                      ? `${(batchProgress.songsProcessed / batchProgress.totalSongs) * 100}%`
+                      : '0%',
                     transition: 'width 0.5s ease-out'
                   }}
                 />
               </div>
 
               <p className="text-sm text-zinc-400 text-center">
-                AI classification in progress...
-              </p>
-              <p className="text-xs text-zinc-500 text-center">
-                This may take a few minutes depending on the number of songs.
+                {batchProgress.songsProcessed} / {batchProgress.totalSongs} songs processed
               </p>
             </div>
           </>
@@ -460,110 +532,25 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-4">
-              {/* Stats Row - Clear labels */}
-              <div className="flex items-center gap-4 text-sm">
+            <div className="py-4">
+              {/* Stats Row */}
+              <div className="flex items-center justify-center gap-3 text-sm">
                 <span className="text-green-400 font-medium">
                   {result.summary.imported} imported
                 </span>
-                <span className="text-zinc-500">•</span>
+                <span className="text-zinc-600">•</span>
                 <span className="text-zinc-400">
                   {result.summary.skipped} existing
                 </span>
                 {result.summary.errors > 0 && (
                   <>
-                    <span className="text-zinc-500">•</span>
+                    <span className="text-zinc-600">•</span>
                     <span className="text-red-400">
                       {result.summary.errors} errors
                     </span>
                   </>
                 )}
               </div>
-
-              {/* Live Feed of Imported Songs */}
-              {displayedSongs.length > 0 && (
-                <div
-                  ref={feedRef}
-                  className="max-h-48 overflow-y-auto space-y-1.5 pr-2"
-                >
-                  {displayedSongs.map((song, i) => (
-                    <div
-                      key={song.isrc || i}
-                      className="flex items-center gap-2 text-sm animate-fade-in"
-                      style={{ animationDelay: `${i * 50}ms` }}
-                    >
-                      <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                      <span className="truncate text-zinc-300 min-w-0" style={{ maxWidth: 'calc(100% - 180px)' }}>
-                        {song.artist} – {song.title}
-                      </span>
-                      {song.aiSubgenre1 && (
-                        <span className="ml-auto px-2 py-0.5 bg-zinc-800 rounded text-xs text-zinc-400 whitespace-nowrap">
-                          {song.aiSubgenre1}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                  {result.summary.imported > 10 && (
-                    <p className="text-xs text-zinc-500 pt-1">
-                      and {result.summary.imported - 10} more...
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Expandable Details */}
-              {(result.summary.skipped > 0 || result.summary.errors > 0) && (
-                <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-                  <CollapsibleTrigger className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-300 transition-colors">
-                    {detailsOpen ? (
-                      <ChevronDown className="w-4 h-4" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4" />
-                    )}
-                    View details
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="pt-3 space-y-3">
-                    {/* Skipped Songs */}
-                    {result.summary.skipped > 0 && (
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
-                          <SkipForward className="w-3.5 h-3.5" />
-                          Already in database
-                        </p>
-                        <div className="max-h-24 overflow-y-auto space-y-1 pl-5">
-                          {result.results.skipped.slice(0, 5).map((song, i) => (
-                            <p key={i} className="text-xs text-zinc-500 truncate">
-                              {song.artist} – {song.title}
-                            </p>
-                          ))}
-                          {result.summary.skipped > 5 && (
-                            <p className="text-xs text-zinc-600">
-                              +{result.summary.skipped - 5} more
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Errors */}
-                    {result.summary.errors > 0 && (
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-red-400 flex items-center gap-1.5">
-                          <AlertTriangle className="w-3.5 h-3.5" />
-                          Processing errors
-                        </p>
-                        <div className="max-h-24 overflow-y-auto space-y-1 pl-5">
-                          {result.results.errors.map((err, i) => (
-                            <p key={i} className="text-xs text-red-400/80 truncate">
-                              {err.artist} – {err.title}: {err.error}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </CollapsibleContent>
-                </Collapsible>
-              )}
             </div>
 
             <DialogFooter className="gap-2 sm:gap-0">
@@ -577,24 +564,6 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
           </>
         )}
       </DialogContent>
-
-      {/* CSS for fade-in animation */}
-      <style>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(4px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.2s ease-out forwards;
-          opacity: 0;
-        }
-      `}</style>
     </Dialog>
   );
 }

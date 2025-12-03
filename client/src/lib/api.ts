@@ -199,6 +199,58 @@ export interface UploadStatus {
   duplicateSongs: number;
 }
 
+// New upload flow interfaces
+export interface SongToProcess {
+  artist: string;
+  title: string;
+  isrc?: string;
+  bpm?: number;
+  spotifyTrackId?: string;
+  s3Url?: string;
+  artworkUrl?: string;
+  spotifyPreviewUrl?: string;
+  spotifyArtworkUrl?: string;
+}
+
+export interface UploadResponse {
+  batchId: string;
+  playlistId: string;
+  playlistName: string;
+  status: 'ready' | 'processing' | 'complete';
+  summary: {
+    total: number;
+    toProcess: number;
+    skipped: number;
+  };
+  songsToProcess: SongToProcess[];
+  skippedSongs: Array<{
+    isrc: string;
+    title: string;
+    artist: string;
+  }>;
+}
+
+export interface ProcessedSong {
+  isrc: string;
+  title: string;
+  artist: string;
+  aiEnergy?: string | null;
+  aiAccessibility?: string | null;
+  aiSubgenre1?: string | null;
+  aiSubgenre2?: string | null;
+  aiSubgenre3?: string | null;
+  aiExplicit?: string | null;
+  status: 'success' | 'error';
+  error?: string;
+}
+
+export interface ProcessBatchResponse {
+  batchId: string;
+  processed: number;
+  results: ProcessedSong[];
+  errors: Array<{ artist: string; title: string; error: string }>;
+}
+
 /**
  * Gets the status of an upload batch (for progress tracking)
  */
@@ -213,4 +265,46 @@ export async function getUploadStatus(batchId: string): Promise<UploadStatus> {
   }
 
   return response.json();
+}
+
+/**
+ * Process a batch of songs with AI enrichment (3-phase parallel processing)
+ */
+export async function processBatch(
+  batchId: string,
+  playlistId: string,
+  uploadBatchName: string,
+  songs: SongToProcess[]
+): Promise<ProcessBatchResponse> {
+  const response = await fetch('/api/songs/process-batch', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      batchId,
+      playlistId,
+      uploadBatchName,
+      songs,
+    }),
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to process batch' }));
+    throw new Error(error.error || 'Failed to process batch');
+  }
+
+  return response.json();
+}
+
+/**
+ * Utility to chunk an array into smaller batches
+ */
+export function chunkArray<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
 }

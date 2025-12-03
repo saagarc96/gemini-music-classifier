@@ -4,8 +4,6 @@ import formidable from 'formidable';
 import fs from 'fs';
 import csv from 'csv-parser';
 import { v4 as uuidv4 } from 'uuid';
-import { classifySong } from '../../src/classifiers/gemini-classifier.cjs';
-import { classifyExplicitContent } from '../../src/classifiers/explicit-classifier.cjs';
 
 const prisma = new PrismaClient();
 
@@ -119,25 +117,18 @@ interface UploadResult {
   batchId: string;
   playlistId: string;
   playlistName: string;
+  status: 'ready' | 'processing' | 'complete';
   summary: {
     total: number;
-    imported: number;
+    toProcess: number;
     skipped: number;
-    errors: number;
   };
-  results: {
-    imported: Array<any>;
-    skipped: Array<{
-      isrc: string;
-      title: string;
-      artist: string;
-    }>;
-    errors: Array<{
-      title: string;
-      artist: string;
-      error: string;
-    }>;
-  };
+  songsToProcess: ParsedSong[];
+  skippedSongs: Array<{
+    isrc: string;
+    title: string;
+    artist: string;
+  }>;
 }
 
 /**
@@ -255,68 +246,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Initialize result structure
+    // Return songs ready for batch processing
+    // The frontend will call /api/songs/process-batch in chunks
     const result: UploadResult = {
       batchId: uploadBatchId,
       playlistId: playlist.id,
       playlistName: batchName,
+      status: songsToProcess.length > 0 ? 'ready' : 'complete',
       summary: {
         total: songs.length,
-        imported: 0,
-        skipped: skippedSongs.length,
-        errors: 0
+        toProcess: songsToProcess.length,
+        skipped: skippedSongs.length
       },
-      results: {
-        imported: [],
-        skipped: skippedSongs,
-        errors: []
-      }
+      songsToProcess: songsToProcess,
+      skippedSongs: skippedSongs
     };
-
-    // Process new songs in parallel (concurrency: 7)
-    const CONCURRENCY = 7;
-
-    const processSong = async (song: ParsedSong) => {
-      try {
-        const enrichedSong = await enrichAndSaveSong(song, uploadBatchId, batchName, playlist.id);
-        return { type: 'imported' as const, data: enrichedSong };
-      } catch (error: any) {
-        return {
-          type: 'error' as const,
-          data: {
-            title: song.title,
-            artist: song.artist,
-            error: error.message
-          }
-        };
-      }
-    };
-
-    // Process in batches
-    for (let i = 0; i < songsToProcess.length; i += CONCURRENCY) {
-      const batch = songsToProcess.slice(i, i + CONCURRENCY);
-      const batchResults = await Promise.all(batch.map(processSong));
-
-      for (const res of batchResults) {
-        if (res.type === 'imported') {
-          result.results.imported.push(res.data);
-          result.summary.imported++;
-        } else if (res.type === 'error') {
-          result.results.errors.push(res.data);
-          result.summary.errors++;
-        }
-      }
-    }
-
-    // Update playlist stats
-    await prisma.playlist.update({
-      where: { id: playlist.id },
-      data: {
-        totalSongs: songs.length,
-        newSongs: result.summary.imported,
-        duplicateSongs: result.summary.skipped
-      }
-    });
 
     return res.status(200).json(result);
 
@@ -414,65 +358,3 @@ async function parseCSV(filePath: string): Promise<ParsedSong[]> {
   });
 }
 
-/**
- * Enrich a song with AI classification and save to database
- */
-async function enrichAndSaveSong(song: ParsedSong, uploadBatchId: string, uploadBatchName: string, playlistId: string) {
-  // Run Gemini classification
-  const geminiResult = await classifySong(song.artist, song.title, {
-    bpm: song.bpm
-  });
-
-  // Run Parallel AI explicit check
-  const explicitResult = await classifyExplicitContent(song.artist, song.title);
-
-  // Create enriched song object
-  const enrichedSong = {
-    isrc: song.isrc || `TEMP-${uuidv4().substring(0, 8).toUpperCase()}`, // Generate temp ISRC if missing
-    title: song.title,
-    artist: song.artist,
-    bpm: song.bpm || null,
-    spotifyTrackId: song.spotifyTrackId || null,
-    s3Url: song.s3Url || null,
-    // Populate 'artwork' field (used by frontend) from Spotify artwork or CSV artwork
-    artwork: song.spotifyArtworkUrl || song.artworkUrl || null,
-    artworkUrl: song.artworkUrl || null,
-    spotifyPreviewUrl: song.spotifyPreviewUrl || null,
-    spotifyArtworkUrl: song.spotifyArtworkUrl || null,
-    // Gemini results
-    aiEnergy: geminiResult?.energy || null,
-    aiAccessibility: geminiResult?.accessibility || null,
-    aiSubgenre1: geminiResult?.subgenre1 || null,
-    aiSubgenre2: geminiResult?.subgenre2 || null,
-    aiSubgenre3: geminiResult?.subgenre3 || null,
-    aiReasoning: geminiResult?.reasoning || null,
-    aiContextUsed: geminiResult?.context || null,
-    // Parallel AI results
-    aiExplicit: explicitResult?.classification || null,
-    // Status
-    aiStatus: geminiResult?.status === 'SUCCESS' ? 'SUCCESS' : 'ERROR',
-    aiErrorMessage: geminiResult?.error_message || null,
-    // Upload tracking
-    uploadBatchId,
-    uploadBatchName,
-    reviewed: false
-  };
-
-  // Save to database
-  const savedSong = await prisma.song.upsert({
-    where: { isrc: enrichedSong.isrc },
-    update: enrichedSong,
-    create: enrichedSong
-  });
-
-  // Create playlist association
-  await prisma.playlistSong.create({
-    data: {
-      playlistId: playlistId,
-      songIsrc: savedSong.isrc,
-      wasNew: true
-    }
-  });
-
-  return savedSong;
-}
