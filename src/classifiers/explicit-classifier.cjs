@@ -40,7 +40,7 @@ async function classifyExplicitContent(artist, title) {
 }
 
 /**
- * Submits explicit content analysis task to Parallel AI
+ * Submits explicit content analysis task to Parallel AI (internal)
  */
 async function submitExplicitTask(artist, title) {
   const requestBody = buildExplicitPrompt(artist, title);
@@ -73,7 +73,33 @@ async function submitExplicitTask(artist, title) {
 }
 
 /**
- * Polls for task completion result
+ * Submits explicit content analysis task and returns submission info (async, non-blocking)
+ * @param {string} artist - Artist name
+ * @param {string} title - Song title
+ * @returns {Promise<{runId: string, artist: string, title: string, status: string} | {artist: string, title: string, status: string, error: string}>}
+ */
+async function submitExplicitTaskAsync(artist, title) {
+  try {
+    const runId = await submitExplicitTask(artist, title);
+    return {
+      runId,
+      artist,
+      title,
+      status: 'submitted'
+    };
+  } catch (error) {
+    console.error(`[Explicit] Submit failed for ${artist} - ${title}:`, error.message);
+    return {
+      artist,
+      title,
+      status: 'error',
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Polls for task completion result (internal)
  */
 async function pollForResult(runId, artist, title, timeout = 60000) {
   const startTime = Date.now();
@@ -115,6 +141,24 @@ async function pollForResult(runId, artist, title, timeout = 60000) {
   }
 
   throw new Error(`Timeout waiting for result after ${timeout}ms`);
+}
+
+/**
+ * Polls for explicit content result by runId (exported for batch processing)
+ * @param {string} runId - The run ID from submission
+ * @param {string} artist - Artist name (for logging)
+ * @param {string} title - Song title (for logging)
+ * @param {number} timeout - Timeout in ms (default 60000)
+ * @returns {Promise<{classification: string|null, first_example: string, error_details?: string}>}
+ */
+async function pollExplicitResult(runId, artist, title, timeout = 60000) {
+  try {
+    const result = await pollForResult(runId, artist, title, timeout);
+    return processExplicitResponse(result);
+  } catch (error) {
+    console.error(`[Explicit] Poll failed for ${artist} - ${title}:`, error.message);
+    return createExplicitFallback(artist, title, error.message);
+  }
 }
 
 /**
@@ -190,12 +234,13 @@ function processExplicitResponse(contentData) {
 
 /**
  * Creates fallback result on error
+ * Returns null for classification to distinguish errors from valid results
  */
 function createExplicitFallback(artist, title, errorMessage) {
   console.warn(`[Explicit] Creating fallback for ${artist} - ${title} due to: ${errorMessage}`);
 
   return {
-    classification: "Unknown",
+    classification: null,
     first_example: "",
     error_details: errorMessage
   };
@@ -209,5 +254,7 @@ function sleep(ms) {
 }
 
 module.exports = {
-  classifyExplicitContent
+  classifyExplicitContent,
+  submitExplicitTaskAsync,
+  pollExplicitResult
 };

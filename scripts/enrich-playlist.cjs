@@ -26,6 +26,7 @@ const { PrismaClient } = require('@prisma/client');
 const { initLogger } = require('braintrust');
 const { classifySong } = require('../src/classifiers/gemini-classifier.cjs');
 const { classifyExplicitContent } = require('../src/classifiers/explicit-classifier.cjs');
+const { submitAllExplicitTasks, pollAndUpdateExplicitResults } = require('../src/utils/explicit-batch-helper.cjs');
 const { calculateSongSimilarity, areSongsDuplicate } = require('../src/utils/fuzzy-matcher.cjs');
 const { v4: uuidv4 } = require('uuid');
 
@@ -158,8 +159,23 @@ async function enrichPlaylist() {
       });
     }
 
-    // 2. Process songs in batches
-    console.log(`[2/5] Processing songs (concurrency: ${options.concurrency})...`);
+    // === 3-PHASE PROCESSING ===
+
+    // Phase 1: Submit all explicit tasks upfront (non-blocking)
+    let explicitSubmissions = [];
+    if (!options.geminiOnly && !options.explicitOnly) {
+      console.log('[2.1/5] Phase 1: Submitting explicit content tasks...');
+      explicitSubmissions = await submitAllExplicitTasks(songsToProcess, options.concurrency);
+      const submitted = explicitSubmissions.filter(s => s.status === 'submitted').length;
+      console.log(`  ✓ Submitted ${submitted}/${songsToProcess.length} tasks\n`);
+    }
+
+    // Phase 2: Run Gemini in batches AND save to DB immediately (with aiExplicit: null)
+    // In explicitOnly mode, this still runs but only updates explicit content
+    const phase2Label = options.explicitOnly
+      ? '[2/5] Running explicit-only classification'
+      : `[2.2/5] Phase 2: Running Gemini classification (concurrency: ${options.concurrency})`;
+    console.log(`${phase2Label}...`);
     const results = [];
 
     for (let i = 0; i < songsToProcess.length; i += options.concurrency) {
@@ -169,7 +185,7 @@ async function enrichPlaylist() {
 
       console.log(`  Batch ${batchNumber}/${totalBatches} (${batch.length} songs):`);
 
-      // Process batch in parallel
+      // Process Gemini and save to DB immediately (aiExplicit will be updated in Phase 3)
       const batchResults = await Promise.all(
         batch.map(song => enrichSong(song, options, duplicateDecisions[song.isrc], uploadBatchId, playlist.id))
       );
@@ -180,8 +196,16 @@ async function enrichPlaylist() {
       console.log(`  Progress: ${processed}/${songsToProcess.length}\n`);
     }
 
-    // 3. Save to database
-    console.log('[3/5] Saving to database...');
+    // Phase 3: Poll all explicit results and UPDATE existing records
+    if (!options.geminiOnly && explicitSubmissions.length > 0) {
+      console.log('[2.3/5] Phase 3: Polling explicit content results...');
+      const { updated, failed } = await pollAndUpdateExplicitResults(explicitSubmissions, results, prisma);
+      const withExplicit = results.filter(r => r.aiExplicit).length;
+      console.log(`  ✓ Updated ${withExplicit} songs with explicit classifications\n`);
+    }
+
+    // 3. Summary of saved songs
+    console.log('[3/5] Database save summary...');
     const saved = results.filter(r => r.status === 'success').length;
     console.log(`  ✓ Saved ${saved} songs to database\n`);
 
@@ -273,9 +297,13 @@ async function enrichSong(song, options, duplicateDecision, uploadBatchId, playl
       if (existingBeforeProcessing && existingBeforeProcessing.aiStatus === 'SUCCESS' && isRecent(existingBeforeProcessing.modifiedAt)) {
         console.log(`${logPrefix} → Skipped (already processed)`);
 
-        // Still create playlist association even if skipped
-        await prisma.playlistSong.create({
-          data: {
+        // Still create playlist association even if skipped (upsert to handle duplicates)
+        await prisma.playlistSong.upsert({
+          where: {
+            playlistId_songIsrc: { playlistId, songIsrc: song.isrc }
+          },
+          update: {},
+          create: {
             playlistId: playlistId,
             songIsrc: song.isrc,
             wasNew: false
@@ -298,13 +326,16 @@ async function enrichSong(song, options, duplicateDecision, uploadBatchId, playl
       });
     }
 
-    // Run Parallel AI explicit check
-    if (!options.geminiOnly) {
+    // Run Parallel AI explicit check ONLY in explicitOnly mode
+    // In normal mode, explicit is handled by Phase 3 (pollAndUpdateExplicitResults)
+    if (options.explicitOnly) {
       console.log(`${logPrefix} → Parallel AI...`);
       explicitResult = await classifyExplicitContent(song.artist, song.title);
     }
 
     // Combine results
+    // Note: aiExplicit is set to null here and will be updated in Phase 3
+    // (unless we're in explicitOnly mode)
     const enrichedSong = {
       isrc: song.isrc,
       title: song.title,
@@ -322,7 +353,7 @@ async function enrichSong(song, options, duplicateDecision, uploadBatchId, playl
       aiSubgenre3: geminiResult?.subgenre3 || null,
       aiReasoning: geminiResult?.reasoning || null,
       aiContextUsed: geminiResult?.context || null,
-      // Parallel AI results
+      // Parallel AI results (null for now, updated in Phase 3 unless explicitOnly)
       aiExplicit: explicitResult?.classification || null,
       // Status
       aiStatus: (geminiResult?.status === 'SUCCESS' || options.explicitOnly) ? 'SUCCESS' : 'ERROR',
@@ -366,9 +397,13 @@ async function enrichSong(song, options, duplicateDecision, uploadBatchId, playl
       console.log(`${logPrefix} → ✓ Success`);
     }
 
-    // Create playlist association
-    await prisma.playlistSong.create({
-      data: {
+    // Create playlist association (upsert to handle duplicates in CSV)
+    await prisma.playlistSong.upsert({
+      where: {
+        playlistId_songIsrc: { playlistId, songIsrc: song.isrc }
+      },
+      update: {},
+      create: {
         playlistId: playlistId,
         songIsrc: song.isrc,
         wasNew: wasNew
