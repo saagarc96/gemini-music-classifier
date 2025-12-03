@@ -251,6 +251,35 @@ export interface ProcessBatchResponse {
   errors: Array<{ artist: string; title: string; error: string }>;
 }
 
+// Explicit detection interfaces
+export interface ExplicitSubmission {
+  index: number;
+  runId: string | null;
+  artist: string;
+  title: string;
+  status: 'submitted' | 'error';
+  error?: string;
+}
+
+export interface SubmitExplicitResponse {
+  submitted: number;
+  total: number;
+  submissions: ExplicitSubmission[];
+}
+
+export interface ExplicitResult {
+  isrc: string;
+  classification: string | null;
+  status: 'success' | 'error';
+  error?: string;
+}
+
+export interface PollExplicitResponse {
+  polled: number;
+  successful: number;
+  results: ExplicitResult[];
+}
+
 /**
  * Gets the status of an upload batch (for progress tracking)
  */
@@ -268,7 +297,30 @@ export async function getUploadStatus(batchId: string): Promise<UploadStatus> {
 }
 
 /**
- * Process a batch of songs with AI enrichment (3-phase parallel processing)
+ * Submit all explicit detection tasks upfront (fast, non-blocking)
+ */
+export async function submitAllExplicit(
+  songs: Array<{ artist: string; title: string }>
+): Promise<SubmitExplicitResponse> {
+  const response = await fetch('/api/songs/submit-explicit', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ songs }),
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to submit explicit tasks' }));
+    throw new Error(error.error || 'Failed to submit explicit tasks');
+  }
+
+  return response.json();
+}
+
+/**
+ * Process a batch of songs with Gemini classification only
  */
 export async function processBatch(
   batchId: string,
@@ -293,6 +345,29 @@ export async function processBatch(
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Failed to process batch' }));
     throw new Error(error.error || 'Failed to process batch');
+  }
+
+  return response.json();
+}
+
+/**
+ * Poll all explicit detection results and update database
+ */
+export async function pollAllExplicit(
+  submissions: Array<{ runId: string; isrc: string; artist: string; title: string }>
+): Promise<PollExplicitResponse> {
+  const response = await fetch('/api/songs/poll-explicit', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ submissions }),
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to poll explicit results' }));
+    throw new Error(error.error || 'Failed to poll explicit results');
   }
 
   return response.json();

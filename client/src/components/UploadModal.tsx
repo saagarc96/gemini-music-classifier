@@ -1,9 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
+  submitAllExplicit,
   processBatch,
+  pollAllExplicit,
   chunkArray,
   type ProcessedSong,
   type UploadResponse,
+  type ExplicitSubmission,
 } from '../lib/api';
 
 // Request notification permission
@@ -243,11 +246,29 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
       const allImported: ProcessedSong[] = [];
       const allErrors: Array<{ artist: string; title: string; error: string }> = [];
 
-      // Step 2: Process songs in batches if there are songs to process
+      // Track ISRC mapping for explicit polling
+      const isrcMap = new Map<number, string>(); // index -> isrc
+      let explicitSubmissions: ExplicitSubmission[] = [];
+
+      // Step 2: Process songs if there are songs to process
       if (uploadResponse.songsToProcess.length > 0) {
         setUploadState('processing');
 
-        const BATCH_SIZE = 10;
+        // Phase 1: Submit ALL explicit tasks upfront (fast, ~50ms each)
+        console.log('[Upload] Submitting all explicit tasks upfront...');
+        try {
+          const explicitResponse = await submitAllExplicit(
+            uploadResponse.songsToProcess.map(s => ({ artist: s.artist, title: s.title }))
+          );
+          explicitSubmissions = explicitResponse.submissions;
+          console.log(`[Upload] Explicit submitted: ${explicitResponse.submitted}/${explicitResponse.total}`);
+        } catch (error: any) {
+          console.error('[Upload] Failed to submit explicit tasks:', error.message);
+          // Continue with Gemini - explicit is optional
+        }
+
+        // Phase 2: Process Gemini in batches of 5
+        const BATCH_SIZE = 5;
         const batches = chunkArray(uploadResponse.songsToProcess, BATCH_SIZE);
 
         setBatchProgress(prev => ({
@@ -257,6 +278,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
           totalSongs: uploadResponse.songsToProcess.length,
         }));
 
+        let songIndex = 0;
         for (let i = 0; i < batches.length; i++) {
           setBatchProgress(prev => ({
             ...prev,
@@ -271,6 +293,20 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
               batches[i]
             );
 
+            // Track ISRC mapping for explicit polling
+            for (const result of batchResult.results) {
+              // Find the original index
+              const originalSong = batches[i].find(s => s.artist === result.artist && s.title === result.title);
+              if (originalSong) {
+                const originalIndex = uploadResponse.songsToProcess.findIndex(
+                  s => s.artist === originalSong.artist && s.title === originalSong.title
+                );
+                if (originalIndex >= 0) {
+                  isrcMap.set(originalIndex, result.isrc);
+                }
+              }
+            }
+
             // Add results progressively
             allImported.push(...batchResult.results);
             allErrors.push(...batchResult.errors);
@@ -280,6 +316,8 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
               ...prev,
               songsProcessed: prev.songsProcessed + batchResult.processed + batchResult.errors.length,
             }));
+
+            songIndex += batches[i].length;
 
           } catch (batchError: any) {
             console.error(`Batch ${i + 1} failed:`, batchError);
@@ -291,12 +329,36 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
                 error: batchError.message || 'Batch processing failed',
               });
             }
+            songIndex += batches[i].length;
+          }
+        }
+
+        // Phase 3: Poll ALL explicit results at the end
+        setBatchProgress(prev => ({ ...prev, phase: 'finalizing' }));
+
+        if (explicitSubmissions.length > 0 && isrcMap.size > 0) {
+          console.log('[Upload] Polling all explicit results...');
+          try {
+            // Build poll request with ISRCs
+            const pollSubmissions = explicitSubmissions
+              .filter(s => s.status === 'submitted' && s.runId && isrcMap.has(s.index))
+              .map(s => ({
+                runId: s.runId!,
+                isrc: isrcMap.get(s.index)!,
+                artist: s.artist,
+                title: s.title,
+              }));
+
+            if (pollSubmissions.length > 0) {
+              const pollResult = await pollAllExplicit(pollSubmissions);
+              console.log(`[Upload] Explicit polled: ${pollResult.successful}/${pollResult.polled}`);
+            }
+          } catch (error: any) {
+            console.error('[Upload] Failed to poll explicit results:', error.message);
+            // Non-fatal - songs are already saved, just missing explicit
           }
         }
       }
-
-      // Step 3: Finalize
-      setBatchProgress(prev => ({ ...prev, phase: 'finalizing' }));
 
       const finalResult: UploadResult = {
         batchId: uploadResponse.batchId,
