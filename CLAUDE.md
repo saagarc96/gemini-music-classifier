@@ -53,6 +53,32 @@ Parses Spotify export, fetches preview URLs/artwork, normalizes BPM (50-170), ru
 
 **Spotify API Setup:** Add `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` to `.env` from https://developer.spotify.com/dashboard
 
+### Pre-Tagged Curator Import (Expedited)
+
+```bash
+# Import curator-tagged CSV (skips AI, marks as reviewed)
+npm run import:pretagged "path/to/curator-tagged.csv"
+
+# Options:
+npm run import:pretagged playlist.csv --playlist-name="HRT Spa"  # Custom name
+npm run import:pretagged playlist.csv --dry-run                  # Preview only
+```
+
+For curators who already know the correct tags. Fetches Spotify preview URLs/artwork but skips AI classification. Sets `reviewed=true` immediately.
+
+**CSV Format** (10 columns):
+```csv
+Song,Artist,BPM,Spotify Track Id,ISRC,Curator_Energy,Curator_Accessibility,Curator_Explicit,Curator_Subgenre,Uploaded By
+Flute Canyon,Native American Instrumentals,62,2m3l9ErXFZa4fheFFasysZ,US1234567890,Low,Eclectic,Family Friendly,Native American Spa,Kristine
+```
+
+- **Curator_Energy**: Low, Medium, High
+- **Curator_Accessibility**: Eclectic, Timeless, Commercial, Cheesy
+- **Curator_Explicit**: Family Friendly, Suggestive, Explicit
+- **Curator_Subgenre**: Semicolon-separated (e.g., "Native American Spa;Ambient")
+
+Template: `docs/templates/expedited-curator-upload-template.csv`
+
 ### Batch Processing (Legacy)
 
 ```bash

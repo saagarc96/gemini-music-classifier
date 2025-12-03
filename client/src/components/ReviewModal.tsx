@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronDown, ChevronRight, User, X } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Dialog, DialogContent } from './ui/dialog';
@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from './ui/select';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { SearchableSelect } from './ui/searchable-select';
 import { useAuth } from '../contexts/AuthContext';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
@@ -43,6 +44,11 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueu
   const lastRejectedIsrc = useRef<string | null>(null);
 
   const isAdmin = user?.role === 'ADMIN';
+
+  const subgenreOptions = useMemo(
+    () => SUBGENRES.map((genre) => ({ value: genre, label: genre })),
+    []
+  );
 
   useEffect(() => {
     if (song) {
@@ -228,6 +234,7 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueu
             spotifyTrackId={song.spotify_track_id}
             title={song.title}
             artist={song.artist}
+            autoplay
           />
 
           {/* Admin Review Actions */}
@@ -333,49 +340,28 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueu
 
             <div className="space-y-2">
               <Label htmlFor="subgenre1" className="text-zinc-300">Subgenre 1 *</Label>
-              <Select value={subgenre1 || ''} onValueChange={(val) => setSubgenre1(val || undefined)}>
-                <SelectTrigger id="subgenre1" className="bg-zinc-900 border-zinc-800 text-zinc-100">
-                  <SelectValue placeholder="Select primary subgenre" />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800">
-                  {SUBGENRES.map((genre) => (
-                    <SelectItem
-                      key={genre}
-                      value={genre}
-                      className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
-                    >
-                      {genre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={subgenreOptions}
+                value={subgenre1}
+                onChange={setSubgenre1}
+                placeholder="Select primary subgenre"
+                searchPlaceholder="Search subgenres..."
+              />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="subgenre2" className="text-zinc-300">Subgenre 2</Label>
               <div className="flex items-center gap-2">
                 <div className="flex-1">
-                  <Select value={subgenre2 || ''} onValueChange={(val) => setSubgenre2(val || undefined)}>
-                    <SelectTrigger id="subgenre2" className="w-full bg-zinc-900 border-zinc-800 text-zinc-100">
-                      <SelectValue placeholder="Select secondary subgenre (optional)" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-900 border-zinc-800">
-                      <SelectItem value="_none" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
-                        None
-                      </SelectItem>
-                      {SUBGENRES.map((genre) => (
-                        <SelectItem
-                          key={genre}
-                          value={genre}
-                          className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
-                        >
-                          {genre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={subgenreOptions}
+                    value={subgenre2}
+                    onChange={setSubgenre2}
+                    placeholder="Select secondary subgenre (optional)"
+                    searchPlaceholder="Search subgenres..."
+                  />
                 </div>
-                {subgenre2 && subgenre2 !== '_none' && (
+                {subgenre2 && (
                   <button
                     type="button"
                     onClick={clearSubgenre2}
@@ -392,27 +378,15 @@ export function ReviewModal({ song, isOpen, onClose, onSave, onNext, onEndOfQueu
               <Label htmlFor="subgenre3" className="text-zinc-300">Subgenre 3</Label>
               <div className="flex items-center gap-2">
                 <div className="flex-1">
-                  <Select value={subgenre3 || ''} onValueChange={(val) => setSubgenre3(val || undefined)}>
-                    <SelectTrigger id="subgenre3" className="w-full bg-zinc-900 border-zinc-800 text-zinc-100">
-                      <SelectValue placeholder="Select tertiary subgenre (optional)" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-900 border-zinc-800">
-                      <SelectItem value="_none" className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100">
-                        None
-                      </SelectItem>
-                      {SUBGENRES.map((genre) => (
-                        <SelectItem
-                          key={genre}
-                          value={genre}
-                          className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
-                        >
-                          {genre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={subgenreOptions}
+                    value={subgenre3}
+                    onChange={setSubgenre3}
+                    placeholder="Select tertiary subgenre (optional)"
+                    searchPlaceholder="Search subgenres..."
+                  />
                 </div>
-                {subgenre3 && subgenre3 !== '_none' && (
+                {subgenre3 && (
                   <button
                     type="button"
                     onClick={clearSubgenre3}
