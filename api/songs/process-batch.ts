@@ -74,9 +74,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { batchId, playlistId, uploadBatchName, songs } = req.body as ProcessBatchRequest;
 
-    if (!batchId || !playlistId || !songs || songs.length === 0) {
+    if (!batchId || !playlistId || !uploadBatchName || !songs || songs.length === 0) {
       return res.status(400).json({
-        error: 'Missing required fields: batchId, playlistId, songs'
+        error: 'Missing required fields: batchId, playlistId, uploadBatchName, songs'
       });
     }
 
@@ -196,6 +196,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           error: geminiRes.error || 'Unknown error'
         });
       }
+    }
+
+    // Update playlist stats after processing this batch
+    try {
+      await prisma.playlist.update({
+        where: { id: playlistId },
+        data: {
+          totalSongs: { increment: songs.length },
+          newSongs: { increment: results.length }
+        }
+      });
+    } catch (statsError: any) {
+      console.error(`[ProcessBatch] Failed to update playlist stats:`, statsError.message);
+      // Non-fatal - don't fail the batch for stats update failure
     }
 
     const response: ProcessBatchResponse = {

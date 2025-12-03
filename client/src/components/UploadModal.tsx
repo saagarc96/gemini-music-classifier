@@ -235,8 +235,14 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Upload failed: ${response.statusText}`);
+        let errorMessage = `Upload failed: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // Response was not JSON (possibly HTML error page)
+        }
+        throw new Error(errorMessage);
       }
 
       const uploadResponse: UploadResponse = await response.json();
@@ -254,7 +260,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
       if (uploadResponse.songsToProcess.length > 0) {
         setUploadState('processing');
 
-        // Phase 1: Submit ALL explicit tasks upfront (fast, ~50ms each)
+        // Phase 1: Submit explicit tasks upfront for async processing
         console.log('[Upload] Submitting all explicit tasks upfront...');
         try {
           const explicitResponse = await submitAllExplicit(
@@ -264,7 +270,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
           console.log(`[Upload] Explicit submitted: ${explicitResponse.submitted}/${explicitResponse.total}`);
         } catch (error: any) {
           console.error('[Upload] Failed to submit explicit tasks:', error.message);
-          // Continue with Gemini - explicit is optional
+          toast.warning('Explicit content detection unavailable - songs will be imported without explicit classification');
         }
 
         // Phase 2: Process Gemini in batches of 5
@@ -278,7 +284,9 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
           totalSongs: uploadResponse.songsToProcess.length,
         }));
 
-        let songIndex = 0;
+        // Track used indices to prevent duplicate matches for songs with same artist+title
+        const usedIndices = new Set<number>();
+
         for (let i = 0; i < batches.length; i++) {
           setBatchProgress(prev => ({
             ...prev,
@@ -293,17 +301,14 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
               batches[i]
             );
 
-            // Track ISRC mapping for explicit polling
+            // Track ISRC mapping for explicit polling (avoid race condition with duplicates)
             for (const result of batchResult.results) {
-              // Find the original index
-              const originalSong = batches[i].find(s => s.artist === result.artist && s.title === result.title);
-              if (originalSong) {
-                const originalIndex = uploadResponse.songsToProcess.findIndex(
-                  s => s.artist === originalSong.artist && s.title === originalSong.title
-                );
-                if (originalIndex >= 0) {
-                  isrcMap.set(originalIndex, result.isrc);
-                }
+              const originalIndex = uploadResponse.songsToProcess.findIndex(
+                (s, idx) => !usedIndices.has(idx) && s.artist === result.artist && s.title === result.title
+              );
+              if (originalIndex >= 0) {
+                usedIndices.add(originalIndex);
+                isrcMap.set(originalIndex, result.isrc);
               }
             }
 
@@ -317,8 +322,6 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
               songsProcessed: prev.songsProcessed + batchResult.processed + batchResult.errors.length,
             }));
 
-            songIndex += batches[i].length;
-
           } catch (batchError: any) {
             console.error(`Batch ${i + 1} failed:`, batchError);
             // Add all songs in failed batch to errors
@@ -329,7 +332,6 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
                 error: batchError.message || 'Batch processing failed',
               });
             }
-            songIndex += batches[i].length;
           }
         }
 
@@ -355,7 +357,7 @@ export function UploadModal({ open, onOpenChange, onUploadComplete }: UploadModa
             }
           } catch (error: any) {
             console.error('[Upload] Failed to poll explicit results:', error.message);
-            // Non-fatal - songs are already saved, just missing explicit
+            toast.warning('Could not retrieve explicit classifications - some songs may be missing explicit data');
           }
         }
       }

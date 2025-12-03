@@ -57,9 +57,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Validate song objects have required fields
+    for (const song of songs) {
+      if (!song.artist || typeof song.artist !== 'string' || !song.title || typeof song.title !== 'string') {
+        return res.status(400).json({
+          error: 'Each song must have artist and title strings'
+        });
+      }
+    }
+
     console.log(`[SubmitExplicit] Submitting ${songs.length} explicit tasks...`);
 
-    // Submit all explicit tasks in parallel (fast, ~50ms each)
+    // Submit all explicit tasks in parallel - fire-and-forget pattern for async processing
     const submissions = await Promise.all(
       songs.map(async (song, index): Promise<ExplicitSubmission> => {
         try {

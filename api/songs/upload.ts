@@ -148,15 +148,15 @@ async function getExistingIsrcs(isrcs: string[]): Promise<Set<string>> {
 /**
  * POST /api/songs/upload
  *
- * Upload and process a CSV file with songs
+ * Parse CSV and prepare songs for batch processing.
  * - ISRC-based deduplication (skip songs that already exist)
  * - Creates playlist record from CSV filename
- * - AI enrichment with Gemini + Parallel AI
+ * - Returns songs for frontend to process via /api/songs/process-batch
  *
  * Multipart form data:
  * - file: CSV file (max 250 songs for web uploads)
  *
- * Response: UploadResult
+ * Response: UploadResult with songsToProcess array
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST
@@ -183,8 +183,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Create playlist record (following enrich-playlist.cjs pattern)
-    const playlist = await prisma.playlist.create({
+    // Create playlist record
+    let playlist: { id: string } | null = null;
+    playlist = await prisma.playlist.create({
       data: {
         name: batchName,
         uploadBatchId: uploadBatchId,
@@ -265,9 +266,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(result);
 
   } catch (error: any) {
+    // Clean up orphaned playlist if created
+    if (playlist?.id) {
+      await prisma.playlist.delete({ where: { id: playlist.id } }).catch(() => {});
+    }
     console.error('Error processing upload:', error);
     return res.status(500).json({
       error: 'Internal server error',
+      code: error.code || 'UPLOAD_FAILED',
       message: error.message
     });
   } finally {

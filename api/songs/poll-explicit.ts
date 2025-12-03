@@ -62,49 +62,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`[PollExplicit] Polling ${submissions.length} explicit results...`);
 
-    // Poll all explicit results in parallel
-    const results = await Promise.all(
-      submissions.map(async (submission): Promise<ExplicitResult> => {
-        if (!submission.runId) {
-          return {
-            isrc: submission.isrc,
-            classification: null,
-            status: 'error',
-            error: 'No runId provided'
-          };
-        }
+    // Process poll requests in batches to avoid overwhelming DB connection pool
+    const POLL_BATCH_SIZE = 20;
+    const results: ExplicitResult[] = [];
 
-        try {
-          const result = await pollExplicitResult(
-            submission.runId,
-            submission.artist,
-            submission.title
-          );
+    for (let i = 0; i < submissions.length; i += POLL_BATCH_SIZE) {
+      const batch = submissions.slice(i, i + POLL_BATCH_SIZE);
 
-          // Update DB with explicit classification
-          if (result.classification && submission.isrc) {
-            await prisma.song.update({
-              where: { isrc: submission.isrc },
-              data: { aiExplicit: result.classification }
-            });
+      const batchResults = await Promise.all(
+        batch.map(async (submission): Promise<ExplicitResult> => {
+          if (!submission.runId) {
+            return {
+              isrc: submission.isrc,
+              classification: null,
+              status: 'error',
+              error: 'No runId provided'
+            };
           }
 
-          return {
-            isrc: submission.isrc,
-            classification: result.classification,
-            status: 'success'
-          };
-        } catch (error: any) {
-          console.error(`[PollExplicit] Error for ${submission.artist} - ${submission.title}:`, error.message);
-          return {
-            isrc: submission.isrc,
-            classification: null,
-            status: 'error',
-            error: error.message
-          };
-        }
-      })
-    );
+          try {
+            const result = await pollExplicitResult(
+              submission.runId,
+              submission.artist,
+              submission.title
+            );
+
+            // Update DB with explicit classification
+            // Skip if classification is null (API returned no result) - preserves any existing value
+            if (result.classification && submission.isrc) {
+              try {
+                await prisma.song.update({
+                  where: { isrc: submission.isrc },
+                  data: { aiExplicit: result.classification }
+                });
+              } catch (dbError: any) {
+                console.error(`[PollExplicit] DB update failed for ${submission.isrc}:`, dbError.message);
+                return {
+                  isrc: submission.isrc,
+                  classification: result.classification,
+                  status: 'error',
+                  error: `DB update failed: ${dbError.message}`
+                };
+              }
+            }
+
+            return {
+              isrc: submission.isrc,
+              classification: result.classification,
+              status: 'success'
+            };
+          } catch (error: any) {
+            console.error(`[PollExplicit] Error for ${submission.artist} - ${submission.title}:`, error.message);
+            return {
+              isrc: submission.isrc,
+              classification: null,
+              status: 'error',
+              error: error.message
+            };
+          }
+        })
+      );
+
+      results.push(...batchResults);
+    }
 
     const successCount = results.filter(r => r.status === 'success').length;
     console.log(`[PollExplicit] Complete: ${successCount}/${submissions.length} successful`);
