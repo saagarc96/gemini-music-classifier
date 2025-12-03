@@ -4,7 +4,7 @@
  * AUTO-GENERATED from data/subgenres.json
  * DO NOT EDIT MANUALLY - Run: npm run generate:constants
  *
- * Last generated: 2025-12-01T16:17:51.891Z
+ * Last generated: 2025-12-03T17:56:06.372Z
  */
 
 export const SUBGENRES = [
@@ -83,6 +83,7 @@ export const SUBGENRES = [
   "Classic Bachata",
   "Classic Bossa Nova",
   "Classic Country Pop",
+  "Classic Folk",
   "Classic Latin Pop",
   "Classic Merengue",
   "Classic Rock",
@@ -98,6 +99,7 @@ export const SUBGENRES = [
   "Disco House",
   "Doo-Wop",
   "EDM Classics",
+  "Early Alternative",
   "East Asian Instrumentals",
   "French Disco",
   "French Electronica",
@@ -224,22 +226,6 @@ export const REVIEW_STATUSES = [
   "reviewed",
   "unreviewed",
 ] as const;
-
-export const APPROVAL_STATUSES = [
-  "all",
-  "active",
-  "PENDING",
-  "APPROVED",
-  "REJECTED",
-] as const;
-
-export const APPROVAL_STATUS_LABELS: Record<string, string> = {
-  "all": "All",
-  "active": "Active (Non-Rejected)",
-  "PENDING": "Pending",
-  "APPROVED": "Approved",
-  "REJECTED": "Rejected",
-};
 
 // TypeScript types for compile-time safety
 export type EnergyLevel = (typeof ENERGY_LEVELS)[number];
