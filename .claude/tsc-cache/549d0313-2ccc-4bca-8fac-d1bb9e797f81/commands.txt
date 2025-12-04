@@ -1,0 +1,1 @@
+client:build:cd /Users/saagar/Desktop/Raina_Projects/gemini-music-classifier/client && npm run build
