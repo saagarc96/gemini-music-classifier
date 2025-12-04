@@ -7,8 +7,8 @@
 
 export interface ExportOptions {
   playlistName?: string;          // Optional playlist name to prepend to subgenres
-  includeAccessibility?: boolean;  // Include ACCESSIBILITY column (default: true)
-  includeExplicit?: boolean;       // Include EXPLICIT column (default: true)
+  includeAccessibility?: boolean;  // Include Familiarity column (default: true)
+  includeExplicit?: boolean;       // Include Explicit column (default: true)
 }
 
 export interface SongExportData {
@@ -122,11 +122,11 @@ function generateHeaders(options: ExportOptions): string[] {
 
   // Add conditional columns
   if (options.includeAccessibility !== false) {
-    headers.push('ACCESSIBILITY');
+    headers.push('Familiarity');
   }
 
   if (options.includeExplicit !== false) {
-    headers.push('EXPLICIT');
+    headers.push('Explicit');
   }
 
   return headers;
