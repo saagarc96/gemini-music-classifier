@@ -97,26 +97,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // Generate ISRC if missing
           const isrc = song.isrc || `TEMP-${uuidv4().substring(0, 8).toUpperCase()}`;
 
+          // Helper to truncate strings to database column limits
+          const truncate = (str: string | null | undefined, maxLen: number): string | null => {
+            if (!str) return null;
+            return str.length > maxLen ? str.substring(0, maxLen) : str;
+          };
+
           // Save to database with aiExplicit: null (updated later by poll-explicit)
           const enrichedSong = {
             isrc,
-            title: song.title,
-            artist: song.artist,
+            title: truncate(song.title, 500),
+            artist: truncate(song.artist, 500),
             bpm: song.bpm || null,
-            spotifyTrackId: song.spotifyTrackId || null,
+            spotifyTrackId: truncate(song.spotifyTrackId, 50),
             s3Url: song.s3Url || null,
             artwork: song.spotifyArtworkUrl || song.artworkUrl || null,
             artworkUrl: song.artworkUrl || null,
             spotifyPreviewUrl: song.spotifyPreviewUrl || null,
             spotifyArtworkUrl: song.spotifyArtworkUrl || null,
-            // Gemini results
-            aiEnergy: geminiResult?.energy || null,
-            aiAccessibility: geminiResult?.accessibility || null,
-            aiSubgenre1: geminiResult?.subgenre1 || null,
-            aiSubgenre2: geminiResult?.subgenre2 || null,
-            aiSubgenre3: geminiResult?.subgenre3 || null,
-            aiReasoning: geminiResult?.reasoning || null,
-            aiContextUsed: geminiResult?.context || null,
+            // Gemini results - truncate to match DB column limits
+            aiEnergy: truncate(geminiResult?.energy, 20),
+            aiAccessibility: truncate(geminiResult?.accessibility, 20),
+            aiSubgenre1: truncate(geminiResult?.subgenre1, 100),
+            aiSubgenre2: truncate(geminiResult?.subgenre2, 100),
+            aiSubgenre3: truncate(geminiResult?.subgenre3, 100),
+            aiReasoning: truncate(geminiResult?.reasoning, 5000),
+            aiContextUsed: truncate(geminiResult?.context, 2000),
             // Explicit will be updated by poll-explicit endpoint
             aiExplicit: null,
             // Status
